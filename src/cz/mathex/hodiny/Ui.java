@@ -231,8 +231,8 @@ final class Ui {
         int p = px(a, .025f);
         back.setPadding(p / 2, p, p * 3 / 2, p);
         back.setBackground(press(a));
-        back.addView(icon(a, R.drawable.ic_back, TEAL, .045f));
-        TextView t = text(a, "Zpět", .038f, TEAL);
+        back.addView(icon(a, R.drawable.ic_back, TEAL, .058f));
+        TextView t = text(a, "Zpět", .046f, TEAL);
         t.setTypeface(medium());
         back.addView(t, left(a, .008f));
         back.setOnClickListener(new View.OnClickListener() {
