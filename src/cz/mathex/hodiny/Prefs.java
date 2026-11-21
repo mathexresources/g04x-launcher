@@ -27,12 +27,12 @@ final class Prefs {
 
     /** Název místa zobrazený u počasí. */
     static String weatherName(Context c) {
-        return get(c).getString("w_name", "Škvorec");
+        return get(c).getString("w_name", "Praha");
     }
 
-    /** Dotaz pro wttr.in – výchozí jsou souřadnice Škvorce, ať se netrefí jiná obec stejného jména. */
+    /** Dotaz pro wttr.in – výchozí jsou souřadnice Prahy (centrum). */
     static String weatherQuery(Context c) {
-        return get(c).getString("w_query", "50.047,14.730");
+        return get(c).getString("w_query", "50.088,14.421");
     }
 
     static String printerUrl(Context c) {

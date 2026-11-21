@@ -39,7 +39,7 @@ in the order we actually did it, including the mistakes.
   music controls at the bottom that work without waking the screen. Between 22:00 and 07:00 it turns dim red
   at ~1 % brightness. Any touch outside the music bar wakes it (the first touch never launches anything).
 - **Weather** from [wttr.in](https://wttr.in) (no API key): current temp, condition, min/max, rain chance,
-  next hours. Default location is Škvorec (by coordinates); tap = refresh, long-press = settings.
+  next hours. Default location is Prague (by coordinates); tap = refresh, long-press = settings.
 - **Music card** for whatever is playing (Spotify, SoundCloud, …) via Android MediaSession.
 - **Printer tile** opens the `/clock` page of [thermoprint-server](https://github.com/mathexresources/thermoprint-server)
   in a built-in WebView.
