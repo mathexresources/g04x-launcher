@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -21,54 +22,83 @@ import org.json.JSONObject;
 
 import java.net.URLEncoder;
 
-/** Internetová rádia z radio-browser.info: ★ oblíbené nahoře, pod nimi nejposlouchanější české stanice, hledání. */
+/**
+ * Internetová rádia z radio-browser.info: ★ oblíbené jako velké dlaždice (ťuknout = hrát, podržet = odebrat),
+ * pod nimi nejposlouchanější české stanice a hledání.
+ */
 public class RadioActivity extends Activity {
     private static final String[] SERVERS = {"de1", "nl1", "at1", "de2", "fi1"};
 
     private final Handler h = new Handler(Looper.getMainLooper());
     private LinearLayout list;
     private JSONArray results = new JSONArray();
-    private String heading = "Nejposlouchanější v Česku";
+    private String heading = "NEJPOSLOUCHANĚJŠÍ V ČESKU";
+
+    private int px(float f) {
+        return Ui.px(this, f);
+    }
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        Ui.loadFonts(this);
         LinearLayout root = Ui.box(this, true);
         root.setBackgroundColor(Ui.BG);
-        root.addView(Ui.bar(this, "Rádio", "⏹  Stop", new View.OnClickListener() {
-            public void onClick(View v) {
-                RadioService.stop(RadioActivity.this);
-                h.postDelayed(new Runnable() {
-                    public void run() {
-                        render();
-                    }
-                }, 300);
-            }
-        }));
+        root.setPadding(px(.0625f), px(.0375f), px(.0625f), 0);
 
-        int pad = Ui.px(this, .04f);
+        // horní lišta: zpět · hledání · stop
+        LinearLayout bar = Ui.box(this, false);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.addView(Ui.back(this));
+
+        LinearLayout field = Ui.box(this, false);
+        field.setGravity(Gravity.CENTER_VERTICAL);
+        field.setBackground(Ui.round(Ui.TILE, px(.033f)));
+        field.setPadding(px(.033f), 0, px(.02f), 0);
+        field.addView(Ui.icon(this, R.drawable.ic_search, Ui.DIM, .0375f));
         final EditText search = new EditText(this);
-        search.setHint("🔍  hledat stanici (např. lofi, Evropa 2, jazz)…");
+        search.setHint("hledat stanici – lofi, jazz, Evropa 2…");
         search.setSingleLine(true);
+        search.setBackground(null);
+        search.setTypeface(Ui.regular());
         search.setTextColor(Ui.INK);
-        search.setHintTextColor(Ui.DIM);
-        search.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, Ui.base(this) * .045f);
+        search.setHintTextColor(Ui.FAINT);
+        search.setTextSize(TypedValue.COMPLEX_UNIT_PX, Ui.base(this) * .033f);
         search.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
         search.setOnEditorActionListener(new TextView.OnEditorActionListener() {
             public boolean onEditorAction(TextView v, int id, KeyEvent e) {
                 String q = v.getText().toString().trim();
-                if (q.length() > 0) load("name=" + enc(q) + "&limit=40", "Výsledky: " + q);
+                if (q.length() > 0) load("name=" + enc(q) + "&limit=40", "VÝSLEDKY: " + q.toUpperCase());
                 else load(null, null);
                 return true;
             }
         });
-        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2);
-        sp.leftMargin = sp.rightMargin = pad;
-        root.addView(search, sp);
+        field.addView(search, Ui.lp(0, -2, 1f));
+        LinearLayout.LayoutParams fl = Ui.lp(0, px(.1f), 1f);
+        fl.leftMargin = px(.02f);
+        bar.addView(field, fl);
+
+        LinearLayout stop = Ui.box(this, false);
+        stop.setGravity(Gravity.CENTER_VERTICAL);
+        stop.setBackground(Ui.tile(this, Ui.TILE, .033f));
+        stop.setPadding(px(.033f), 0, px(.033f), 0);
+        stop.addView(Ui.icon(this, R.drawable.ic_stop, Ui.INK, .03f));
+        stop.addView(Ui.text(this, "Stop", .031f, Ui.INK), Ui.left(this, .017f));
+        stop.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                RadioService.stop(RadioActivity.this);
+                later();
+            }
+        });
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, px(.1f));
+        sl.leftMargin = px(.025f);
+        bar.addView(stop, sl);
+        root.addView(bar, new LinearLayout.LayoutParams(-1, px(.108f)));
 
         ScrollView sv = new ScrollView(this);
+        sv.setVerticalScrollBarEnabled(false);
         list = Ui.box(this, true);
-        list.setPadding(pad, 0, pad, pad);
+        list.setPadding(0, 0, 0, px(.046f));
         sv.addView(list);
         root.addView(sv, Ui.lp(-1, 0, 1f));
         setContentView(root);
@@ -82,6 +112,14 @@ public class RadioActivity extends Activity {
         super.onResume();
         Ui.immersive(this);
         render();
+    }
+
+    private void later() {
+        h.postDelayed(new Runnable() {
+            public void run() {
+                render();
+            }
+        }, 350);
     }
 
     private static String enc(String s) {
@@ -125,14 +163,14 @@ public class RadioActivity extends Activity {
             }
         }
         sp().edit().putString("fav", out.toString()).apply();
+        Toast.makeText(this, removed ? "Odebráno z oblíbených" : "Přidáno do oblíbených", Toast.LENGTH_SHORT).show();
         render();
     }
 
     /** query == null → nejposlouchanější české stanice. */
     private void load(final String query, final String title) {
-        final String q = query != null ? query
-                : "countrycode=CZ&order=clickcount&reverse=true&limit=40";
-        heading = title != null ? title : "Nejposlouchanější v Česku";
+        final String q = query != null ? query : "countrycode=CZ&order=clickcount&reverse=true&limit=40";
+        heading = title != null ? title : "NEJPOSLOUCHANĚJŠÍ V ČESKU";
         new Thread(new Runnable() {
             public void run() {
                 JSONArray res = null;
@@ -164,17 +202,28 @@ public class RadioActivity extends Activity {
         list.removeAllViews();
         JSONArray fav = favorites();
         if (fav.length() > 0) {
-            section("★  Oblíbené");
+            section("OBLÍBENÉ");
+            LinearLayout row = null;
             for (int i = 0; i < fav.length(); i++) {
+                if (i % 4 == 0) {
+                    row = Ui.box(this, false);
+                    LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, px(.2f));
+                    if (i > 0) rl.topMargin = px(.025f);
+                    list.addView(row, rl);
+                }
                 JSONObject o = fav.optJSONObject(i);
-                row(o.optString("name"), o.optString("url"), "");
+                favCard(row, o.optString("name"), o.optString("url"));
+            }
+            for (int i = fav.length() % 4; i != 0 && i < 4; i++) { // dorovnat poslední řádek
+                View spacer = new View(this);
+                LinearLayout.LayoutParams p = Ui.lp(0, -1, 1f);
+                p.leftMargin = px(.025f);
+                row.addView(spacer, p);
             }
         }
         section(heading);
         if (results.length() == 0) {
-            TextView t = Ui.text(this, "načítám…", .042f, Ui.DIM);
-            t.setPadding(0, Ui.px(this, .02f), 0, 0);
-            list.addView(t);
+            list.addView(Ui.text(this, "načítám…", .033f, Ui.DIM));
         }
         for (int i = 0; i < results.length(); i++) {
             JSONObject o = results.optJSONObject(i);
@@ -188,55 +237,84 @@ public class RadioActivity extends Activity {
     }
 
     private void section(String title) {
-        TextView t = Ui.text(this, title, .04f, Ui.DIM);
-        t.setPadding(0, Ui.px(this, .035f), 0, Ui.px(this, .01f));
+        TextView t = Ui.text(this, title, .027f, Ui.DIM);
+        t.setLetterSpacing(0.03f);
+        t.setPadding(0, px(.035f), 0, px(.02f));
         list.addView(t);
+    }
+
+    private void favCard(LinearLayout row, final String name, final String url) {
+        boolean playing = url.equals(RadioService.nowUrl);
+        LinearLayout c = Ui.box(this, true);
+        c.setBackground(Ui.tile(this, playing ? Ui.AMBER : Ui.TILE, .046f));
+        c.setPadding(px(.033f), px(.03f), px(.033f), px(.03f));
+        c.addView(Ui.icon(this, playing ? R.drawable.ic_pause : R.drawable.ic_play, playing ? Ui.ON_AMBER : Ui.TEAL, .042f));
+        View fill = new View(this);
+        c.addView(fill, Ui.lp(-1, 0, 1f));
+        TextView n = Ui.text(this, name, .033f, playing ? Ui.ON_AMBER : Ui.INK);
+        n.setTypeface(Ui.medium());
+        n.setMaxLines(2);
+        n.setEllipsize(TextUtils.TruncateAt.END);
+        c.addView(n);
+        c.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                if (url.equals(RadioService.nowUrl)) RadioService.stop(RadioActivity.this);
+                else RadioService.play(RadioActivity.this, name, url);
+                later();
+            }
+        });
+        c.setOnLongClickListener(new View.OnLongClickListener() {
+            public boolean onLongClick(View v) {
+                toggleFav(name, url);
+                return true;
+            }
+        });
+        LinearLayout.LayoutParams p = Ui.lp(0, -1, 1f);
+        if (row.getChildCount() > 0) p.leftMargin = px(.025f);
+        row.addView(c, p);
     }
 
     private void row(final String name, final String url, String sub) {
         boolean playing = url.equals(RadioService.nowUrl);
         LinearLayout r = Ui.box(this, false);
         r.setGravity(Gravity.CENTER_VERTICAL);
-        r.setBackground(Ui.tile(this));
-        int p = Ui.px(this, .035f);
-        r.setPadding(p, p / 2, p / 3, p / 2);
+        r.setBackground(Ui.tile(this, Ui.TILE, .033f));
+        r.setPadding(px(.033f), px(.015f), px(.012f), px(.015f));
         r.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 RadioService.play(RadioActivity.this, name, url);
-                h.postDelayed(new Runnable() {
-                    public void run() {
-                        render();
-                    }
-                }, 300);
+                later();
             }
         });
 
         LinearLayout txt = Ui.box(this, true);
-        TextView n = Ui.text(this, (playing ? "▶  " : "") + name, .048f, playing ? Ui.ACCENT : Ui.INK);
+        TextView n = Ui.text(this, name, .033f, playing ? Ui.AMBER : Ui.INK);
+        n.setTypeface(Ui.medium());
         n.setSingleLine(true);
         n.setEllipsize(TextUtils.TruncateAt.END);
         txt.addView(n);
         if (sub.length() > 0) {
-            TextView s = Ui.text(this, sub, .034f, Ui.DIM);
+            TextView s = Ui.text(this, sub, .025f, Ui.DIM);
             s.setSingleLine(true);
             s.setEllipsize(TextUtils.TruncateAt.END);
-            txt.addView(s, Ui.top(this, .008f));
+            txt.addView(s, Ui.top(this, .006f));
         }
         r.addView(txt, Ui.lp(0, -2, 1f));
 
         boolean fav = isFav(url);
-        TextView star = Ui.text(this, fav ? "★" : "☆", .07f, fav ? Ui.ACCENT : Ui.DIM);
+        LinearLayout star = Ui.box(this, false);
         star.setGravity(Gravity.CENTER);
         star.setBackground(Ui.press(this));
+        star.addView(Ui.icon(this, fav ? R.drawable.ic_star_fill : R.drawable.ic_star, fav ? Ui.AMBER : Ui.DIM, .046f));
         star.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 toggleFav(name, url);
             }
         });
-        r.addView(star, new LinearLayout.LayoutParams(Ui.px(this, .14f), Ui.px(this, .12f)));
+        r.addView(star, new LinearLayout.LayoutParams(px(.1f), px(.1f)));
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.topMargin = Ui.px(this, .02f);
+        lp.topMargin = px(.017f);
         list.addView(r, lp);
     }
 }

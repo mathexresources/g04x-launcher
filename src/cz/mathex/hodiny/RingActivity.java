@@ -46,38 +46,72 @@ public class RingActivity extends Activity {
         lp.screenBrightness = 1f;
         getWindow().setAttributes(lp);
 
+        Ui.loadFonts(this);
         LinearLayout root = Ui.box(this, true);
         root.setBackgroundColor(Ui.BG);
-        root.setGravity(Gravity.CENTER_HORIZONTAL);
-        int pad = Ui.px(this, .06f);
-        root.setPadding(pad, pad, pad, pad);
+        root.setPadding(Ui.px(this, .067f), Ui.px(this, .0625f), Ui.px(this, .067f), Ui.px(this, .058f));
+
+        LinearLayout center = Ui.box(this, true);
+        center.setGravity(Gravity.CENTER);
+        root.addView(center, Ui.lp(-1, 0, 1f));
+
+        LinearLayout chip = Ui.box(this, false);
+        chip.setGravity(Gravity.CENTER_VERTICAL);
+        chip.setBackground(Ui.round(Ui.AMBER_BG, Ui.px(this, .5f)));
+        chip.setPadding(Ui.px(this, .033f), Ui.px(this, .015f), Ui.px(this, .033f), Ui.px(this, .015f));
+        chip.addView(Ui.icon(this, R.drawable.ic_alarm, Ui.AMBER, .042f));
+        TextView cl = Ui.text(this, "Budík", .035f, Ui.AMBER);
+        cl.setTypeface(Ui.medium());
+        chip.addView(cl, Ui.left(this, .02f));
+        center.addView(chip);
 
         Calendar c = Calendar.getInstance();
         TextView time = Ui.text(this, c.get(Calendar.HOUR_OF_DAY) + ":"
-                + (c.get(Calendar.MINUTE) < 10 ? "0" : "") + c.get(Calendar.MINUTE), .34f, Ui.INK);
-        time.setTypeface(Ui.light());
-        root.addView(time);
+                + (c.get(Calendar.MINUTE) < 10 ? "0" : "") + c.get(Calendar.MINUTE), .41f, Ui.INK);
+        time.setTypeface(Ui.display());
+        time.setLetterSpacing(-0.04f);
+        center.addView(time, Ui.top(this, .025f));
+
         Alarms.Alarm me = Alarms.find(Alarms.load(this), alarmId);
-        TextView label = Ui.text(this, "⏰  Budík" + (me != null && me.print ? "   ·   🖨 po vypnutí ranní zpráva" : ""),
-                .055f, Ui.ACCENT);
-        root.addView(label, Ui.top(this, .02f));
+        if (me != null && me.print) {
+            LinearLayout pr = Ui.box(this, false);
+            pr.setGravity(Gravity.CENTER_VERTICAL);
+            pr.addView(Ui.icon(this, R.drawable.ic_printer, Ui.DIM, .0375f));
+            pr.addView(Ui.text(this, "po vypnutí se vytiskne ranní zpráva", .033f, Ui.DIM), Ui.left(this, .017f));
+            center.addView(pr, Ui.top(this, .025f));
+        }
 
         LinearLayout buttons = Ui.box(this, false);
-        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, 0, 1f);
-        bl.topMargin = Ui.px(this, .06f);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, Ui.px(this, .246f));
+        bl.topMargin = Ui.px(this, .046f);
         root.addView(buttons, bl);
-        buttons.addView(button("Odložit " + Alarms.SNOOZE_MIN + " min", Ui.INK, new Runnable() {
-            public void run() {
+
+        LinearLayout snoozeB = Ui.box(this, true);
+        snoozeB.setGravity(Gravity.CENTER);
+        snoozeB.setBackground(Ui.tile(this, Ui.TILE, .058f));
+        TextView st = Ui.text(this, "Odložit", .054f, Ui.INK);
+        st.setTypeface(Ui.medium());
+        snoozeB.addView(st);
+        snoozeB.addView(Ui.text(this, "o " + Alarms.SNOOZE_MIN + " minut", .031f, Ui.DIM), Ui.top(this, .01f));
+        snoozeB.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
                 snooze();
             }
-        }), Ui.lp(0, -1, 1f));
-        View gap = new View(this);
-        buttons.addView(gap, new LinearLayout.LayoutParams(Ui.px(this, .04f), 1));
-        buttons.addView(button("Vypnout", Ui.ACCENT, new Runnable() {
-            public void run() {
+        });
+        buttons.addView(snoozeB, Ui.lp(0, -1, 1f));
+
+        TextView stop = Ui.text(this, "Vypnout", .0625f, Ui.ON_AMBER);
+        stop.setTypeface(Ui.medium());
+        stop.setGravity(Gravity.CENTER);
+        stop.setBackground(Ui.tile(this, Ui.AMBER, .058f));
+        stop.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
                 dismiss();
             }
-        }), Ui.lp(0, -1, 1f));
+        });
+        LinearLayout.LayoutParams sl = Ui.lp(0, -1, 1.4f);
+        sl.leftMargin = Ui.px(this, .033f);
+        buttons.addView(stop, sl);
 
         setContentView(root);
         startSound();
@@ -86,19 +120,6 @@ public class RingActivity extends Activity {
                 snooze(); // nikdo nereaguje → odložit, ať to nezvoní donekonečna
             }
         }, AUTO_SNOOZE);
-    }
-
-    private TextView button(String text, int color, final Runnable r) {
-        TextView t = Ui.text(this, text, .07f, color);
-        t.setTypeface(Ui.medium());
-        t.setGravity(Gravity.CENTER);
-        t.setBackground(Ui.tile(this));
-        t.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                r.run();
-            }
-        });
-        return t;
     }
 
     @Override

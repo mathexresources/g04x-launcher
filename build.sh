@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 JAR=/usr/lib/android-sdk/platforms/android-23/android.jar
 rm -rf build && mkdir -p build/gen build/classes
 
-aapt package -f -M AndroidManifest.xml -S res -I "$JAR" -J build/gen -F build/unsigned.apk
+aapt package -f -M AndroidManifest.xml -S res -A assets -I "$JAR" -J build/gen -F build/unsigned.apk
 javac -source 8 -target 8 -encoding UTF-8 -Xlint:-options -bootclasspath "$JAR" -classpath "$JAR" \
       -d build/classes $(find src build/gen -name '*.java')
 dalvik-exchange --dex --output=build/classes.dex build/classes

@@ -11,6 +11,10 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.media.MediaMetadata;
 import android.media.session.MediaController;
 import android.media.session.MediaSessionManager;
@@ -24,6 +28,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -34,34 +39,51 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 
-/** Domovská obrazovka: hodiny, budík, počasí, hudba, dlaždice. V noci se po minutě nečinnosti ztlumí. */
+/**
+ * Domovská obrazovka (design „Ember“): hodiny, svátek a narozeniny, budík, počasí, přehrávání, dok s ikonami.
+ * Po 15 s bez dotyku standby; ve tmě tlumeně červený. Jas ze senzoru světla, mávnutí rukou probudí.
+ */
 public class MainActivity extends Activity {
     private static final Locale CS = new Locale("cs", "CZ");
     private static final long WEATHER_EVERY = 15 * 60 * 1000L;
     private static final long STANDBY_IDLE = 15 * 1000L;
-    private static final String PREV = "\u23EE\uFE0E", PLAY = "\u25B6\uFE0E", PAUSE = "\u23F8\uFE0E", NEXT = "\u23ED\uFE0E";
     private static final String SPOTIFY = "com.spotify.music";
 
     private final Handler h = new Handler(Looper.getMainLooper());
-    private final SimpleDateFormat dateFmt = new SimpleDateFormat("EEEE d. MMMM", CS);
+    private final SimpleDateFormat dateFmt = new SimpleDateFormat("EEEE · d. MMMM", CS);
 
-    private TextView clock, date, alarm, wIcon, wTemp, wDesc, wRange, wHours;
-    private TextView mTitle, mArtist, bPrev, bPlay, bNext;
+    // plocha
+    private TextView clock, date, alarmTime, alarmLeft, wTemp, wDesc, wRange;
+    private ImageView wIcon;
+    private LinearLayout alarmPill, chips, hours;
+    private TextView mTitle, mSub;
+    private ImageView mArtIcon;
+    private LinearLayout bPrev, bPlay, bNext;
+
+    // standby
     private FrameLayout standby;
-    private LinearLayout sbCenter;
-    private TextView todayLine;
+    private LinearLayout sbCenter, sbMedia, sbAlarm, sbPrev, sbPlay, sbNext;
+    private TextView sbDate, sbClock, sbAlarmTime, sbAlarmLeft, sbTitle, sbSub, sbHint;
+    private ImageView sbAlarmIcon, sbMediaIcon;
+    private boolean standbyOn;
 
-    // senzory: automatický jas a mávnutí rukou
-    private android.hardware.SensorManager sensors;
-    private android.hardware.Sensor lightSensor, proxSensor;
+    // senzory
+    private SensorManager sensors;
+    private Sensor lightSensor, proxSensor;
     private float lux = -1, bright = -1;
     private boolean darkRoom;
     private long proxNearAt;
-    private LinearLayout sbMedia;
-    private TextView sbClock, sbAlarm, sbTitle, sbPrev, sbPlay, sbNext;
-    private boolean standbyOn;
+    private float luxBase = -1;
+    private long luxDipAt;
+    /** Živé hodnoty senzorů pro nastavení (ladění). */
+    static volatile String sensorInfo = "senzory: zatím nic";
+    private static volatile float lastProx = -1;
+    static volatile float luxNow = -1;
+    private ClapDetector clap;
 
+    // hudba
     private MediaSessionManager msm;
     private MediaController mc;
     private ComponentName listener;
@@ -70,186 +92,188 @@ public class MainActivity extends Activity {
     private long lastTouch = System.currentTimeMillis();
     private boolean swallowTouch;
 
-    // ------------------------------------------------------------------ layout
+    private int px(float f) {
+        return Ui.px(this, f);
+    }
+
+    // ================================================================== layout
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        Ui.loadFonts(this);
         getWindow().getDecorView().setBackgroundColor(Ui.BG);
         FrameLayout root = new FrameLayout(this);
 
         LinearLayout main = Ui.box(this, true);
-        main.setPadding(px(.05f), px(.04f), px(.05f), px(.04f));
+        main.setBackgroundColor(Ui.BG);
+        main.setPadding(px(.0625f), px(.054f), px(.0625f), px(.05f));
         root.addView(main, new FrameLayout.LayoutParams(-1, -1));
 
-        // horní část: hodiny vlevo, počasí vpravo
+        // --- horní řádek: hodiny vlevo, počasí vpravo
         LinearLayout topRow = Ui.box(this, false);
         main.addView(topRow, Ui.lp(-1, 0, 1f));
 
         LinearLayout left = Ui.box(this, true);
         left.setGravity(Gravity.CENTER_VERTICAL);
-        topRow.addView(left, Ui.lp(0, -1, 1.45f));
+        topRow.addView(left, Ui.lp(0, -1, 1f));
 
-        clock = Ui.text(this, "--:--", .26f, Ui.INK);
-        clock.setTypeface(Ui.light());
-        clock.setLetterSpacing(-0.02f);
+        date = Ui.text(this, "", .04f, Ui.DIM);
+        left.addView(date);
+
+        clock = Ui.text(this, "--:--", .325f, Ui.INK);
+        clock.setTypeface(Ui.display());
+        clock.setLetterSpacing(-0.04f);
         clock.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 setStandby(true);
             }
         });
-        left.addView(clock);
+        left.addView(clock, Ui.top(this, .02f));
 
-        date = Ui.text(this, "", .058f, Ui.INK);
-        left.addView(date, Ui.top(this, .012f));
+        chips = Ui.box(this, false);
+        left.addView(chips, Ui.top(this, .03f));
 
-        todayLine = Ui.text(this, "", .04f, Ui.DIM);
-        todayLine.setSingleLine(true);
-        todayLine.setEllipsize(TextUtils.TruncateAt.END);
-        todayLine.setVisibility(View.GONE);
-        left.addView(todayLine, Ui.top(this, .012f));
-
-        alarm = Ui.text(this, "", .046f, Ui.ACCENT);
-        alarm.setSingleLine(true);
-        alarm.setEllipsize(TextUtils.TruncateAt.END);
-        alarm.setOnClickListener(new View.OnClickListener() {
+        alarmPill = Ui.box(this, false);
+        alarmPill.setGravity(Gravity.CENTER_VERTICAL);
+        alarmPill.setBackground(Ui.tile(this, Ui.AMBER_BG, .033f));
+        alarmPill.setPadding(px(.025f), px(.021f), px(.033f), px(.021f));
+        alarmPill.addView(Ui.icon(this, R.drawable.ic_alarm, Ui.AMBER, .046f));
+        alarmTime = Ui.text(this, "", .035f, Ui.AMBER);
+        alarmTime.setTypeface(Ui.medium());
+        alarmPill.addView(alarmTime, Ui.left(this, .02f));
+        alarmLeft = Ui.text(this, "", .035f, Ui.AMBER_SOFT);
+        alarmLeft.setSingleLine(true);
+        alarmLeft.setEllipsize(TextUtils.TruncateAt.END);
+        alarmPill.addView(alarmLeft, Ui.left(this, .012f));
+        alarmPill.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 showAlarms();
             }
         });
-        left.addView(alarm, Ui.top(this, .016f));
+        left.addView(alarmPill, Ui.top(this, .025f));
 
-        LinearLayout right = Ui.box(this, true);
-        right.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        right.setOnClickListener(new View.OnClickListener() {
+        // karta počasí
+        LinearLayout wCard = Ui.box(this, true);
+        wCard.setBackground(Ui.round(Ui.TILE, px(.054f)));
+        wCard.setPadding(px(.046f), px(.042f), px(.046f), px(.038f));
+        wCard.setGravity(Gravity.CENTER_VERTICAL);
+        wCard.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 wDesc.setText("aktualizuji…");
                 loadWeather();
             }
         });
-        right.setOnLongClickListener(new View.OnLongClickListener() {
+        wCard.setOnLongClickListener(new View.OnLongClickListener() {
             public boolean onLongClick(View v) {
                 openSettings();
                 return true;
             }
         });
-        topRow.addView(right, Ui.lp(0, -1, 1f));
+        LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(px(.546f), -1);
+        wl.leftMargin = px(.046f);
+        topRow.addView(wCard, wl);
 
         LinearLayout wRow = Ui.box(this, false);
         wRow.setGravity(Gravity.CENTER_VERTICAL);
-        wIcon = Ui.text(this, "", .09f, Ui.INK);
-        wTemp = Ui.text(this, "--°", .13f, Ui.INK);
-        wTemp.setTypeface(Ui.light());
+        wIcon = Ui.icon(this, R.drawable.w_cloud, Ui.TEAL, .112f);
         wRow.addView(wIcon);
-        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, -2);
-        tp.leftMargin = px(.025f);
-        wRow.addView(wTemp, tp);
-        right.addView(wRow);
+        wTemp = Ui.text(this, "--°", .13f, Ui.INK);
+        wTemp.setTypeface(Ui.display());
+        wTemp.setLetterSpacing(-0.03f);
+        wRow.addView(wTemp, Ui.left(this, .025f));
+        wCard.addView(wRow);
+        wDesc = Ui.text(this, "načítám počasí…", .033f, Ui.INK);
+        wDesc.setSingleLine(true);
+        wDesc.setEllipsize(TextUtils.TruncateAt.END);
+        wCard.addView(wDesc, Ui.top(this, .02f));
+        wRange = Ui.text(this, "", .029f, Ui.DIM);
+        wCard.addView(wRange, Ui.top(this, .012f));
+        View line = new View(this);
+        line.setBackgroundColor(Ui.LINE);
+        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-1, Math.max(1, px(.002f)));
+        ll.topMargin = px(.025f);
+        ll.bottomMargin = px(.02f);
+        wCard.addView(line, ll);
+        hours = Ui.box(this, false);
+        wCard.addView(hours, new LinearLayout.LayoutParams(-1, -2));
 
-        wDesc = rightText("načítám počasí…", .045f, Ui.INK);
-        right.addView(wDesc, Ui.top(this, .015f));
-        wRange = rightText("", .04f, Ui.DIM);
-        right.addView(wRange, Ui.top(this, .012f));
-        wHours = rightText("", .036f, Ui.DIM);
-        right.addView(wHours, Ui.top(this, .02f));
+        // --- spodní řádek: přehrávání + dok
+        LinearLayout bottom = Ui.box(this, false);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, px(.183f));
+        bl.topMargin = px(.0375f);
+        main.addView(bottom, bl);
 
-        // karta hudby
         LinearLayout media = Ui.box(this, false);
         media.setGravity(Gravity.CENTER_VERTICAL);
         media.setBackground(Ui.tile(this));
-        media.setPadding(px(.045f), 0, px(.02f), 0);
+        media.setPadding(px(.025f), 0, px(.02f), 0);
         media.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 openPlayer();
             }
         });
-        LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-1, px(.14f));
-        mp.topMargin = px(.025f);
-        main.addView(media, mp);
+        bottom.addView(media, Ui.lp(0, -1, 1f));
+
+        LinearLayout art = Ui.box(this, false);
+        art.setGravity(Gravity.CENTER);
+        art.setBackground(Ui.round(Ui.TEAL_BG, px(.031f)));
+        mArtIcon = Ui.icon(this, R.drawable.ic_radio, Ui.TEAL, .058f);
+        art.addView(mArtIcon);
+        media.addView(art, new LinearLayout.LayoutParams(px(.125f), px(.125f)));
 
         LinearLayout mt = Ui.box(this, true);
-        mTitle = Ui.text(this, "Nic nehraje", .045f, Ui.INK);
+        mTitle = Ui.text(this, "Nic nehraje", .033f, Ui.INK);
         mTitle.setTypeface(Ui.medium());
         mTitle.setSingleLine(true);
         mTitle.setEllipsize(TextUtils.TruncateAt.END);
-        mArtist = Ui.text(this, "ťukni pro Spotify", .036f, Ui.DIM);
-        mArtist.setSingleLine(true);
-        mArtist.setEllipsize(TextUtils.TruncateAt.END);
+        mSub = Ui.text(this, "ťukni pro rádio", .027f, Ui.DIM);
+        mSub.setSingleLine(true);
+        mSub.setEllipsize(TextUtils.TruncateAt.END);
         mt.addView(mTitle);
-        mt.addView(mArtist, Ui.top(this, .01f));
-        media.addView(mt, Ui.lp(0, -2, 1f));
+        mt.addView(mSub, Ui.top(this, .008f));
+        LinearLayout.LayoutParams mtl = Ui.lp(0, -2, 1f);
+        mtl.leftMargin = px(.025f);
+        media.addView(mt, mtl);
 
-        bPrev = control(PREV, .065f);
-        bPlay = control(PLAY, .065f);
-        bNext = control(NEXT, .065f);
-        media.addView(bPrev, new LinearLayout.LayoutParams(px(.15f), -1));
-        media.addView(bPlay, new LinearLayout.LayoutParams(px(.15f), -1));
-        media.addView(bNext, new LinearLayout.LayoutParams(px(.15f), -1));
+        bPrev = Ui.roundButton(this, R.drawable.ic_prev, Ui.SOFT, 0, .092f, .046f);
+        bPlay = Ui.roundButton(this, R.drawable.ic_play, Ui.ON_AMBER, Ui.AMBER, .117f, .046f);
+        bNext = Ui.roundButton(this, R.drawable.ic_next, Ui.SOFT, 0, .092f, .046f);
+        media.addView(bPrev);
+        media.addView(bPlay);
+        media.addView(bNext);
 
-        // dlaždice – jen ikony
-        LinearLayout tiles = Ui.box(this, false);
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, px(.15f));
-        tl.topMargin = px(.025f);
-        main.addView(tiles, tl);
-        addTile(tiles, "⏰", new Runnable() {
+        LinearLayout dock = Ui.box(this, false);
+        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(px(.833f), -1);
+        dl.leftMargin = px(.025f);
+        bottom.addView(dock, dl);
+        dockTile(dock, R.drawable.ic_alarm, Ui.AMBER, new Runnable() {
             public void run() {
                 showAlarms();
             }
         });
-        addTile(tiles, "🎵", new Runnable() {
+        dockTile(dock, R.drawable.ic_music, Ui.INK, new Runnable() {
             public void run() {
                 Ui.launch(MainActivity.this, SPOTIFY, "Spotify");
             }
         });
-        addTile(tiles, "📻", new Runnable() {
+        dockTile(dock, R.drawable.ic_radio, Ui.TEAL, new Runnable() {
             public void run() {
                 startActivity(new Intent(MainActivity.this, RadioActivity.class));
             }
         });
-        addTile(tiles, "🖨", new Runnable() {
+        dockTile(dock, R.drawable.ic_printer, Ui.INK, new Runnable() {
             public void run() {
                 startActivity(new Intent(MainActivity.this, PrinterActivity.class));
             }
         });
-        addTile(tiles, "⋯", new Runnable() {
+        dockTile(dock, R.drawable.ic_grid, Ui.INK, new Runnable() {
             public void run() {
                 startActivity(new Intent(MainActivity.this, AppsActivity.class));
             }
         });
 
-        // standby přes celou obrazovku: čas, budík, dole ovládání hudby
-        standby = new FrameLayout(this);
-        standby.setBackgroundColor(0xFF000000);
-        sbCenter = Ui.box(this, true);
-        sbCenter.setGravity(Gravity.CENTER);
-        sbClock = Ui.text(this, "", .40f, Ui.INK);
-        sbClock.setTypeface(Ui.light());
-        sbClock.setLetterSpacing(-0.02f);
-        sbCenter.addView(sbClock);
-        sbAlarm = Ui.text(this, "", .055f, Ui.ACCENT);
-        sbCenter.addView(sbAlarm, Ui.top(this, .02f));
-        FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(-1, -1);
-        cp.bottomMargin = px(.14f);
-        standby.addView(sbCenter, cp);
-
-        sbMedia = Ui.box(this, false);
-        sbMedia.setGravity(Gravity.CENTER_VERTICAL);
-        sbMedia.setPadding(px(.06f), 0, px(.04f), 0);
-        sbTitle = Ui.text(this, "", .042f, Ui.DIM);
-        sbTitle.setSingleLine(true);
-        sbTitle.setEllipsize(TextUtils.TruncateAt.END);
-        sbMedia.addView(sbTitle, Ui.lp(0, -2, 1f));
-        sbPrev = control(PREV, .06f);
-        sbPlay = control(PLAY, .06f);
-        sbNext = control(NEXT, .06f);
-        sbMedia.addView(sbPrev, new LinearLayout.LayoutParams(px(.15f), -1));
-        sbMedia.addView(sbPlay, new LinearLayout.LayoutParams(px(.15f), -1));
-        sbMedia.addView(sbNext, new LinearLayout.LayoutParams(px(.15f), -1));
-        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-1, px(.16f), Gravity.BOTTOM);
-        bp.bottomMargin = px(.03f);
-        standby.addView(sbMedia, bp);
-        sbMedia.setVisibility(View.GONE);
-        standby.setVisibility(View.GONE);
-        root.addView(standby, new FrameLayout.LayoutParams(-1, -1));
+        buildStandby(root);
+        setContentView(root);
 
         View.OnClickListener prev = new View.OnClickListener() {
             public void onClick(View v) {
@@ -275,47 +299,93 @@ public class MainActivity extends Activity {
         bNext.setOnClickListener(next);
         sbNext.setOnClickListener(next);
 
-        setContentView(root);
-
         msm = (MediaSessionManager) getSystemService(Context.MEDIA_SESSION_SERVICE);
         listener = new ComponentName(this, MediaListener.class);
         showCachedWeather();
         Alarms.schedule(this);
     }
 
-    private int px(float f) {
-        return Ui.px(this, f);
-    }
-
-    private TextView rightText(String s, float size, int color) {
-        TextView t = Ui.text(this, s, size, color);
-        t.setGravity(Gravity.END);
-        return t;
-    }
-
-    private TextView control(String symbol, float size) {
-        TextView t = Ui.text(this, symbol, size, Ui.INK);
-        t.setGravity(Gravity.CENTER);
-        t.setBackground(Ui.press(this));
-        return t;
-    }
-
-    private void addTile(LinearLayout row, String icon, final Runnable action) {
-        LinearLayout t = Ui.box(this, true);
+    private void dockTile(LinearLayout dock, int icon, int color, final Runnable action) {
+        LinearLayout t = Ui.box(this, false);
         t.setGravity(Gravity.CENTER);
         t.setBackground(Ui.tile(this));
-        t.addView(Ui.text(this, icon, .085f, Ui.INK));
+        t.addView(Ui.icon(this, icon, color, .0625f));
         t.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 action.run();
             }
         });
         LinearLayout.LayoutParams p = Ui.lp(0, -1, 1f);
-        if (row.getChildCount() > 0) p.leftMargin = px(.03f);
-        row.addView(t, p);
+        if (dock.getChildCount() > 0) p.leftMargin = px(.021f);
+        dock.addView(t, p);
     }
 
-    // ------------------------------------------------------------------ životní cyklus
+    private void buildStandby(FrameLayout root) {
+        standby = new FrameLayout(this);
+        standby.setBackgroundColor(Ui.BG_STANDBY);
+
+        sbCenter = Ui.box(this, true);
+        sbCenter.setGravity(Gravity.CENTER);
+        sbDate = Ui.text(this, "", .0375f, Ui.FAINT);
+        sbCenter.addView(sbDate);
+        sbClock = Ui.text(this, "", .48f, Ui.INK);
+        sbClock.setTypeface(Ui.light());
+        sbClock.setLetterSpacing(-0.045f);
+        sbCenter.addView(sbClock, Ui.top(this, .02f));
+        sbAlarm = Ui.box(this, false);
+        sbAlarm.setGravity(Gravity.CENTER_VERTICAL);
+        sbAlarmIcon = Ui.icon(this, R.drawable.ic_alarm, Ui.AMBER, .046f);
+        sbAlarm.addView(sbAlarmIcon);
+        sbAlarmTime = Ui.text(this, "", .042f, Ui.AMBER);
+        sbAlarmTime.setTypeface(Ui.medium());
+        sbAlarm.addView(sbAlarmTime, Ui.left(this, .02f));
+        sbAlarmLeft = Ui.text(this, "", .042f, Ui.AMBER_SOFT);
+        sbAlarm.addView(sbAlarmLeft, Ui.left(this, .012f));
+        sbCenter.addView(sbAlarm, Ui.top(this, .045f));
+        FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(-1, -1);
+        cp.bottomMargin = px(.15f);
+        standby.addView(sbCenter, cp);
+
+        sbMedia = Ui.box(this, false);
+        sbMedia.setGravity(Gravity.CENTER_VERTICAL);
+        sbMedia.setBackground(Ui.round(Ui.PILL, px(.5f)));
+        sbMedia.setPadding(px(.0375f), px(.012f), px(.02f), px(.012f));
+        sbMediaIcon = Ui.icon(this, R.drawable.ic_radio, Ui.TEAL, .0375f);
+        sbMedia.addView(sbMediaIcon);
+        sbTitle = Ui.text(this, "", .031f, Ui.SOFT);
+        sbTitle.setSingleLine(true);
+        sbTitle.setEllipsize(TextUtils.TruncateAt.END);
+        sbTitle.setMaxWidth(px(.6f));
+        sbMedia.addView(sbTitle, Ui.left(this, .025f));
+        sbSub = Ui.text(this, "", .027f, Ui.FAINT);
+        sbSub.setSingleLine(true);
+        sbSub.setEllipsize(TextUtils.TruncateAt.END);
+        sbSub.setMaxWidth(px(.35f));
+        sbMedia.addView(sbSub, Ui.left(this, .02f));
+        sbPrev = Ui.roundButton(this, R.drawable.ic_prev, Ui.DIM, 0, .092f, .0375f);
+        sbPlay = Ui.roundButton(this, R.drawable.ic_pause, Ui.INK, 0xFF1C2128, .092f, .0375f);
+        sbNext = Ui.roundButton(this, R.drawable.ic_next, Ui.DIM, 0, .092f, .0375f);
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(px(.092f), px(.092f));
+        pl.leftMargin = px(.02f);
+        sbMedia.addView(sbPrev, pl);
+        sbMedia.addView(sbPlay);
+        sbMedia.addView(sbNext);
+        FrameLayout.LayoutParams mp = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        mp.bottomMargin = px(.054f);
+        standby.addView(sbMedia, mp);
+        sbMedia.setVisibility(View.GONE);
+
+        sbHint = Ui.text(this, "mávni rukou nebo se dotkni pro probuzení", .027f, Ui.NIGHT);
+        FrameLayout.LayoutParams hp = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        hp.bottomMargin = px(.054f);
+        standby.addView(sbHint, hp);
+        sbHint.setVisibility(View.GONE);
+
+        standby.setVisibility(View.GONE);
+        root.addView(standby, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    // ================================================================== životní cyklus
     @Override
     protected void onStart() {
         super.onStart();
@@ -329,7 +399,34 @@ public class MainActivity extends Activity {
         updateAlarm();
         h.post(tick);
         startSensors();
+        startClap();
         loadToday(false);
+    }
+
+    /** Dvojí tlesknutí – jen když je zapnuté v nastavení a je povolený mikrofon. */
+    private void startClap() {
+        if (clap != null) clap.stop();
+        clap = null;
+        if (!Prefs.clapEnabled(this)) return;
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return;
+        clap = new ClapDetector(new ClapDetector.Listener() {
+            public void onDoubleClap() {
+                if (mc != null) {
+                    if (isPlaying(mc)) mc.getTransportControls().pause();
+                    else mc.getTransportControls().play();
+                } else if (standbyOn) {
+                    setStandby(false);
+                }
+                android.widget.Toast.makeText(MainActivity.this, "👏👏", android.widget.Toast.LENGTH_SHORT).show();
+            }
+        });
+        clap.start();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int code, String[] perms, int[] res) {
+        super.onRequestPermissionsResult(code, perms, res);
+        startClap();
     }
 
     @Override
@@ -360,6 +457,8 @@ public class MainActivity extends Activity {
         msm.removeOnActiveSessionsChangedListener(sessions);
         setController(null);
         if (sensors != null) sensors.unregisterListener(sensorListener);
+        if (clap != null) clap.stop();
+        clap = null;
     }
 
     @Override
@@ -400,7 +499,7 @@ public class MainActivity extends Activity {
         return super.dispatchTouchEvent(e);
     }
 
-    // ------------------------------------------------------------------ hodiny a standby
+    // ================================================================== hodiny a standby
     private final Runnable tick = new Runnable() {
         public void run() {
             long now = System.currentTimeMillis();
@@ -409,7 +508,9 @@ public class MainActivity extends Activity {
             if (!t.contentEquals(clock.getText())) {
                 clock.setText(t);
                 sbClock.setText(t);
-                date.setText(dateFmt.format(c.getTime()));
+                String d = dateFmt.format(c.getTime());
+                date.setText(d);
+                sbDate.setText(d.replace(" · ", " "));
                 updateAlarm(); // odpočet do budíku
                 if (standbyOn) {
                     styleStandby();
@@ -432,6 +533,11 @@ public class MainActivity extends Activity {
         return hr >= 22 || hr < 7;
     }
 
+    /** Tma: podle senzoru světla (když je), jinak podle hodin 22–7. */
+    private boolean isDark() {
+        return lightSensor != null && lux >= 0 ? darkRoom : isNightHours(Calendar.getInstance());
+    }
+
     private void setStandby(boolean on) {
         standbyOn = on;
         standby.setVisibility(on ? View.VISIBLE : View.GONE);
@@ -444,87 +550,125 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Tma: podle senzoru světla (když je), jinak podle hodin 22–7. */
-    private boolean isDark() {
-        return lightSensor != null && lux >= 0 ? darkRoom : isNightHours(Calendar.getInstance());
-    }
-
     /** Ochrana displeje: obsah standby se každou minutu posune o pár pixelů. */
     private void shiftStandby() {
-        java.util.Random r = new java.util.Random();
+        Random r = new Random();
         int max = px(.035f);
         sbCenter.setTranslationX(r.nextInt(2 * max + 1) - max);
         sbCenter.setTranslationY(r.nextInt(2 * max + 1) - max);
-        sbMedia.setTranslationX(r.nextInt(px(.02f) * 2 + 1) - px(.02f));
+        int m = px(.02f);
+        sbMedia.setTranslationX(r.nextInt(2 * m + 1) - m);
     }
 
-    /** Jas z luxů (logaritmicky), plynule; ve tmavém standby skoro zhasnuto. */
+    /** Přes den bílý text a jantar, ve tmě vše tlumeně červené na černé. */
+    private void styleStandby() {
+        boolean dark = isDark();
+        standby.setBackgroundColor(dark ? 0xFF000000 : Ui.BG_STANDBY);
+        sbDate.setVisibility(dark ? View.GONE : View.VISIBLE);
+        sbClock.setTextColor(dark ? Ui.NIGHT : Ui.INK);
+        sbAlarmTime.setTextColor(dark ? Ui.NIGHT : Ui.AMBER);
+        sbAlarmLeft.setTextColor(dark ? Ui.NIGHT : Ui.AMBER_SOFT);
+        Ui.tint(sbAlarmIcon, dark ? Ui.NIGHT : Ui.AMBER);
+        sbMedia.setBackground(Ui.round(dark ? 0xFF140707 : Ui.PILL, px(.5f)));
+        sbTitle.setTextColor(dark ? Ui.NIGHT : Ui.SOFT);
+        sbSub.setTextColor(dark ? Ui.NIGHT : Ui.FAINT);
+        Ui.tint(sbMediaIcon, dark ? Ui.NIGHT : Ui.TEAL);
+        Ui.tint((ImageView) sbPrev.getChildAt(0), dark ? Ui.NIGHT : Ui.DIM);
+        Ui.tint((ImageView) sbPlay.getChildAt(0), dark ? Ui.NIGHT : Ui.INK);
+        Ui.tint((ImageView) sbNext.getChildAt(0), dark ? Ui.NIGHT : Ui.DIM);
+        sbPlay.setBackground(Ui.circle(dark ? 0xFF200A08 : 0xFF1C2128));
+        sbHint.setVisibility(dark && sbMedia.getVisibility() != View.VISIBLE ? View.VISIBLE : View.GONE);
+        applyBrightness();
+    }
+
+    /**
+     * Jas z luxů (logaritmicky), plynule. Úrovně jsou schválně světlejší:
+     * tma ~12 %, pokoj večer ~45 %, den ~75 %, slunce 100 %. Tmavý standby ~4 %.
+     */
     private void applyBrightness() {
         WindowManager.LayoutParams lp = getWindow().getAttributes();
         if (standbyOn && isDark()) {
-            lp.screenBrightness = 0.01f;
+            lp.screenBrightness = 0.04f;
         } else if (lightSensor == null || bright < 0) {
             lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
         } else {
-            lp.screenBrightness = Math.max(0.02f, standbyOn ? bright * 0.7f : bright);
+            lp.screenBrightness = Math.max(0.08f, standbyOn ? bright * 0.85f : bright);
         }
         getWindow().setAttributes(lp);
     }
 
     private void startSensors() {
         if (sensors == null) {
-            sensors = (android.hardware.SensorManager) getSystemService(Context.SENSOR_SERVICE);
-            lightSensor = sensors.getDefaultSensor(android.hardware.Sensor.TYPE_LIGHT);
-            proxSensor = sensors.getDefaultSensor(android.hardware.Sensor.TYPE_PROXIMITY);
+            sensors = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+            lightSensor = sensors.getDefaultSensor(Sensor.TYPE_LIGHT);
+            proxSensor = sensors.getDefaultSensor(Sensor.TYPE_PROXIMITY);
         }
-        if (lightSensor != null) sensors.registerListener(sensorListener, lightSensor, android.hardware.SensorManager.SENSOR_DELAY_NORMAL);
-        if (proxSensor != null) sensors.registerListener(sensorListener, proxSensor, android.hardware.SensorManager.SENSOR_DELAY_NORMAL);
+        if (lightSensor != null) sensors.registerListener(sensorListener, lightSensor, SensorManager.SENSOR_DELAY_GAME);
+        if (proxSensor != null) sensors.registerListener(sensorListener, proxSensor, SensorManager.SENSOR_DELAY_GAME);
+        sensorInfo = "světlo: " + (lightSensor != null ? lightSensor.getName() : "není")
+                + "\npřiblížení: " + (proxSensor != null ? proxSensor.getName() + " (max " + proxSensor.getMaximumRange() + ")" : "není");
     }
 
-    private final android.hardware.SensorEventListener sensorListener = new android.hardware.SensorEventListener() {
-        public void onSensorChanged(android.hardware.SensorEvent e) {
-            if (e.sensor.getType() == android.hardware.Sensor.TYPE_LIGHT) {
+    private final SensorEventListener sensorListener = new SensorEventListener() {
+        public void onSensorChanged(SensorEvent e) {
+            long now = System.currentTimeMillis();
+            if (e.sensor.getType() == Sensor.TYPE_LIGHT) {
                 lux = e.values[0];
-                float target = (float) Math.min(1.0, 0.02 + Math.log10(lux + 1) / 3.3 * 0.98);
+                // mávnutí přes senzor světla: rychlý pokles pod 40 % a návrat do 1,5 s
+                if (luxBase < 0) luxBase = lux;
+                if (luxDipAt == 0 && luxBase > 4 && lux < luxBase * 0.4f) {
+                    luxDipAt = now;
+                } else if (luxDipAt > 0) {
+                    if (lux > luxBase * 0.65f) {
+                        if (now - luxDipAt < 1500) wave();
+                        luxDipAt = 0;
+                    } else if (now - luxDipAt > 3000) {
+                        luxDipAt = 0; // zhaslo se natrvalo, nebylo to mávnutí
+                        luxBase = lux;
+                    }
+                }
+                if (luxDipAt == 0) luxBase = luxBase + (lux - luxBase) * 0.15f;
+                float target = (float) Math.min(1.0, 0.12 + Math.log10(lux + 1) / 2.8 * 0.88);
                 bright = bright < 0 ? target : bright + (target - bright) * 0.35f;
                 boolean wasDark = darkRoom;
+                luxNow = lux;
                 if (lux < 3) darkRoom = true;
-                else if (lux > 8) darkRoom = false; // hystereze, ať to neblikání
+                else if (lux > 8) darkRoom = false; // hystereze, ať to nebliká
                 if (standbyOn && wasDark != darkRoom) styleStandby();
                 else applyBrightness();
-            } else if (e.sensor.getType() == android.hardware.Sensor.TYPE_PROXIMITY) {
-                boolean near = e.values[0] < Math.min(e.sensor.getMaximumRange(), 3f);
-                long now = System.currentTimeMillis();
+            } else if (e.sensor.getType() == Sensor.TYPE_PROXIMITY) {
+                lastProx = e.values[0];
+                boolean near = e.values[0] < e.sensor.getMaximumRange();
                 if (near) {
                     proxNearAt = now;
-                } else if (proxNearAt > 0 && now - proxNearAt < 2000) { // mávnutí = krátce blízko a pryč
+                    wave(); // stačí přiblížit ruku
+                } else {
                     proxNearAt = 0;
-                    if (standbyOn) setStandby(false);
-                    lastTouch = now;
                 }
             }
         }
 
-        public void onAccuracyChanged(android.hardware.Sensor s, int a) {
+        public void onAccuracyChanged(Sensor s, int a) {
         }
     };
 
-    /** V noci (22–7) červeně a skoro zhasnuto, přes den normálně. */
-    private void styleStandby() {
-        boolean dark = isDark();
-        int main = dark ? Ui.NIGHT : Ui.INK;
-        int sub = dark ? Ui.NIGHT : Ui.ACCENT;
-        int dim = dark ? Ui.NIGHT : Ui.DIM;
-        sbClock.setTextColor(main);
-        sbAlarm.setTextColor(sub);
-        sbTitle.setTextColor(dim);
-        sbPrev.setTextColor(dark ? Ui.NIGHT : Ui.INK);
-        sbPlay.setTextColor(dark ? Ui.NIGHT : Ui.INK);
-        sbNext.setTextColor(dark ? Ui.NIGHT : Ui.INK);
-        applyBrightness();
+    private long lastWave;
+
+    private void wave() {
+        long now = System.currentTimeMillis();
+        lastTouch = now;
+        if (now - lastWave < 1000) return;
+        lastWave = now;
+        if (standbyOn) setStandby(false);
     }
 
-    // ------------------------------------------------------------------ budík
+    /** Živé hodnoty pro nastavení. */
+    static String sensorDebug() {
+        return sensorInfo + "\nteď: přiblížení " + lastProx + " · mikrofon špička " + ClapDetector.lastPeak
+                + " / pozadí " + ClapDetector.lastBg;
+    }
+
+    // ================================================================== budík
     private final BroadcastReceiver alarmChanged = new BroadcastReceiver() {
         public void onReceive(Context c, Intent i) {
             updateAlarm();
@@ -542,8 +686,11 @@ public class MainActivity extends Activity {
         AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
         AlarmManager.AlarmClockInfo ai = am.getNextAlarmClock();
         if (ai == null) {
-            alarm.setText("⏰  žádný budík");
-            alarm.setTextColor(Ui.DIM);
+            alarmTime.setText("žádný budík");
+            alarmLeft.setText("");
+            alarmTime.setTextColor(Ui.DIM);
+            alarmPill.setBackground(Ui.tile(this, Ui.TILE, .033f));
+            Ui.tint((ImageView) alarmPill.getChildAt(0), Ui.DIM);
             sbAlarm.setVisibility(View.GONE);
             return;
         }
@@ -556,10 +703,14 @@ public class MainActivity extends Activity {
         else if (diff < 7) day = new SimpleDateFormat("EEEE", CS).format(a.getTime());
         else day = new SimpleDateFormat("d. M.", CS).format(a.getTime());
         String time = a.get(Calendar.HOUR_OF_DAY) + ":" + two(a.get(Calendar.MINUTE));
-        String left = countdown(ai.getTriggerTime() - System.currentTimeMillis());
-        alarm.setText("⏰ " + day + " " + time + " · " + left);
-        alarm.setTextColor(Ui.ACCENT);
-        sbAlarm.setText("⏰  " + time + "  ·  " + left);
+        String left = "· " + countdown(ai.getTriggerTime() - System.currentTimeMillis());
+        alarmTime.setText(day + " " + time);
+        alarmTime.setTextColor(Ui.AMBER);
+        alarmLeft.setText(left);
+        alarmPill.setBackground(Ui.tile(this, Ui.AMBER_BG, .033f));
+        Ui.tint((ImageView) alarmPill.getChildAt(0), Ui.AMBER);
+        sbAlarmTime.setText(time);
+        sbAlarmLeft.setText(left);
         sbAlarm.setVisibility(View.VISIBLE);
     }
 
@@ -579,7 +730,7 @@ public class MainActivity extends Activity {
         startActivity(new Intent(this, AlarmsActivity.class));
     }
 
-    // ------------------------------------------------------------------ počasí (wttr.in)
+    // ================================================================== počasí (wttr.in)
     private boolean weatherLoading;
 
     private void loadWeather() {
@@ -644,14 +795,12 @@ public class MainActivity extends Activity {
             JSONObject o = new JSONObject(js);
             JSONObject cur = o.getJSONArray("current_condition").getJSONObject(0);
             int code = (int) num(cur, "weatherCode");
-            Calendar now = Calendar.getInstance();
-            int hr = now.get(Calendar.HOUR_OF_DAY);
-            boolean day = hr >= 7 && hr < 19;
-            wIcon.setText(icon(code, day));
+            int hr = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+            wIcon.setImageResource(weatherIcon(code, hr >= 7 && hr < 19));
             wTemp.setText(num(cur, "temp_C") + "°");
             String desc = val(cur, "lang_cs");
             if (desc == null || desc.trim().length() == 0) desc = describe(code);
-            wDesc.setText(Prefs.weatherName(this) + " · " + desc.trim().toLowerCase(new Locale("cs", "CZ")));
+            wDesc.setText(Prefs.weatherName(this) + " · " + desc.trim().toLowerCase(CS));
 
             JSONArray days = o.getJSONArray("weather");
             JSONObject today = days.getJSONObject(0);
@@ -661,11 +810,11 @@ public class MainActivity extends Activity {
                 JSONObject h = hourly.getJSONObject(i);
                 if (Integer.parseInt(h.getString("time")) / 100 + 3 > hr) rain = Math.max(rain, (int) num(h, "chanceofrain"));
             }
-            wRange.setText("↑" + num(today, "maxtempC") + "°  ↓" + num(today, "mintempC") + "°"
-                    + (rain >= 20 ? "   ☂ " + rain + " %" : ""));
+            wRange.setText("↑ " + num(today, "maxtempC") + "°   ↓ " + num(today, "mintempC") + "°"
+                    + (rain >= 20 ? "   ·   déšť " + rain + " %" : ""));
 
             // další 4 tříhodinové úseky (wttr má hodnoty po 3 h), i přes půlnoc
-            StringBuilder sb = new StringBuilder();
+            hours.removeAllViews();
             int shown = 0;
             for (int d = 0; d < days.length() && shown < 4; d++) {
                 JSONArray hs = days.getJSONObject(d).getJSONArray("hourly");
@@ -673,30 +822,36 @@ public class MainActivity extends Activity {
                     JSONObject h = hs.getJSONObject(i);
                     int at = Integer.parseInt(h.getString("time")) / 100;
                     if (d == 0 && at <= hr) continue;
-                    if (sb.length() > 0) sb.append("   ");
-                    sb.append(at).append("h ").append(num(h, "tempC")).append("°");
+                    LinearLayout col = Ui.box(this, true);
+                    col.setGravity(Gravity.CENTER_HORIZONTAL);
+                    col.addView(Ui.text(this, at + "h", .027f, Ui.DIM));
+                    ImageView ic = Ui.icon(this, weatherIcon((int) num(h, "weatherCode"), at >= 7 && at < 19), Ui.SOFT, .046f);
+                    LinearLayout.LayoutParams il = (LinearLayout.LayoutParams) ic.getLayoutParams();
+                    il.topMargin = il.bottomMargin = px(.012f);
+                    col.addView(ic);
+                    TextView t = Ui.text(this, num(h, "tempC") + "°", .031f, Ui.INK);
+                    col.addView(t);
+                    hours.addView(col, Ui.lp(0, -2, 1f));
                     shown++;
                 }
             }
-            wHours.setText(sb.toString());
         } catch (Exception e) {
             wDesc.setText("počasí: chyba dat, ťukni pro obnovení");
             Prefs.get(this).edit().remove("weather_wttr").putLong("weather_ts", 0).apply();
         }
     }
 
-    /** Kódy počasí World Weather Online (používá je wttr.in). */
-    private static String icon(int c, boolean day) {
+    /** Kódy počasí World Weather Online (používá je wttr.in) → ikony. */
+    private static int weatherIcon(int c, boolean day) {
         switch (c) {
-            case 113: return day ? "☀️" : "🌙";
-            case 116: return day ? "⛅" : "☁️";
-            case 119: case 122: return "☁️";
-            case 143: case 248: case 260: return "🌫";
-            case 200: case 386: case 389: case 392: case 395: return "⛈";
+            case 113: return day ? R.drawable.w_sun : R.drawable.w_moon;
+            case 116: return day ? R.drawable.w_partly : R.drawable.w_cloud;
+            case 119: case 122: return R.drawable.w_cloud;
+            case 143: case 248: case 260: return R.drawable.w_fog;
+            case 200: case 386: case 389: case 392: case 395: return R.drawable.w_storm;
             case 227: case 230: case 323: case 326: case 329: case 332: case 335: case 338: case 368: case 371:
-                return "🌨";
-            case 176: case 263: case 266: case 293: case 296: case 353: return "🌦";
-            default: return "🌧";
+                return R.drawable.w_snow;
+            default: return R.drawable.w_rain;
         }
     }
 
@@ -721,11 +876,13 @@ public class MainActivity extends Activity {
         Prefs.showSettings(this, new Runnable() {
             public void run() {
                 loadWeather();
+                loadToday(true);
+                startClap();
             }
         });
     }
 
-    // ------------------------------------------------------------------ hudba
+    // ================================================================== hudba
     private final MediaSessionManager.OnActiveSessionsChangedListener sessions =
             new MediaSessionManager.OnActiveSessionsChangedListener() {
                 public void onActiveSessionsChanged(List<MediaController> list) {
@@ -792,23 +949,35 @@ public class MainActivity extends Activity {
         bPlay.setVisibility(vis);
         bNext.setVisibility(vis);
         sbMedia.setVisibility(vis);
+        if (standbyOn) styleStandby();
         if (mc == null) {
+            mArtIcon.setImageResource(R.drawable.ic_radio);
             if (needMediaPermission) {
                 mTitle.setText("Povol ovládání hudby");
-                mArtist.setText("ťukni sem → Hodiny → Povolit");
+                mSub.setText("ťukni sem → Hodiny → Povolit");
             } else {
                 mTitle.setText("Nic nehraje");
-                mArtist.setText("ťukni pro rádio");
+                mSub.setText("ťukni pro rádio");
             }
             return;
         }
+        boolean radio = getPackageName().equals(mc.getPackageName());
+        int artRes = radio ? R.drawable.ic_radio : R.drawable.ic_music;
+        mArtIcon.setImageResource(artRes);
+        sbMediaIcon.setImageResource(artRes);
         MediaMetadata md = mc.getMetadata();
         String title = md != null ? md.getString(MediaMetadata.METADATA_KEY_TITLE) : null;
         String artist = md != null ? md.getString(MediaMetadata.METADATA_KEY_ARTIST) : null;
         String app = appLabel(mc.getPackageName());
-        mTitle.setText(title != null && title.length() > 0 ? title : app);
-        mArtist.setText(artist != null && artist.length() > 0 ? artist : app);
-        bPlay.setText(isPlaying(mc) ? "⏸︎" : "▶︎");
+        String t = title != null && title.length() > 0 ? title : app;
+        String sub = radio ? "rádio · živě" : (artist != null && artist.length() > 0 ? artist : app);
+        mTitle.setText(t);
+        mSub.setText(sub);
+        sbTitle.setText(t);
+        sbSub.setText(sub);
+        boolean playing = isPlaying(mc);
+        Ui.setIcon(bPlay, playing ? R.drawable.ic_pause : R.drawable.ic_play);
+        Ui.setIcon(sbPlay, playing ? R.drawable.ic_pause : R.drawable.ic_play);
     }
 
     private String appLabel(String pkg) {
@@ -844,23 +1013,22 @@ public class MainActivity extends Activity {
         startActivity(new Intent(this, RadioActivity.class));
     }
 
-    // ------------------------------------------------------------------ svátek a narozeniny
+    // ================================================================== svátek a narozeniny
     private boolean todayLoading;
 
     /** Z thermoprint-serveru (GET /api/today), jinak aspoň svátek ze svatky.adresa.info. Cache na den. */
     private void loadToday(boolean force) {
         final String day = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
-        String cached = Prefs.get(this).getString("today_" + day, null);
+        String cached = Prefs.get(this).getString("today2_" + day, null);
         if (cached != null && !force) {
-            todayLine.setText(cached);
-            todayLine.setVisibility(cached.length() > 0 ? View.VISIBLE : View.GONE);
+            showToday(cached);
             return;
         }
         if (todayLoading) return;
         todayLoading = true;
         new Thread(new Runnable() {
             public void run() {
-                String line = null;
+                JSONObject res = null;
                 String token = Prefs.apiToken(MainActivity.this);
                 if (token.length() > 0) {
                     try {
@@ -875,13 +1043,13 @@ public class MainActivity extends Activity {
                             byte[] buf = new byte[4096];
                             int n;
                             while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-                            line = formatToday(new JSONObject(out.toString("UTF-8")));
+                            res = new JSONObject(out.toString("UTF-8"));
                         }
                         con.disconnect();
                     } catch (Exception ignored) {
                     }
                 }
-                if (line == null) { // server bez /api/today nebo nedostupný → jen svátek
+                if (res == null) { // server bez /api/today nebo nedostupný → jen svátek
                     try {
                         JSONArray j = new JSONArray(Prefs.http("https://svatky.adresa.info/json?date="
                                 + new SimpleDateFormat("ddMM", Locale.US).format(new java.util.Date())));
@@ -890,42 +1058,52 @@ public class MainActivity extends Activity {
                             String nm = j.getJSONObject(i).optString("name");
                             if (nm.length() > 0) sb.append(sb.length() > 0 ? ", " : "").append(nm);
                         }
-                        line = sb.length() > 0 ? "svátek má " + sb : "";
+                        res = new JSONObject().put("nameday", sb.toString());
                     } catch (Exception ignored) {
                     }
                 }
-                final String l = line;
+                final JSONObject r = res;
                 runOnUiThread(new Runnable() {
                     public void run() {
                         todayLoading = false;
-                        if (l == null) return; // zkusí se při dalším startu
-                        Prefs.get(MainActivity.this).edit().putString("today_" + day, l).apply();
-                        todayLine.setText(l);
-                        todayLine.setVisibility(l.length() > 0 ? View.VISIBLE : View.GONE);
+                        if (r == null) return; // zkusí se při dalším startu
+                        Prefs.get(MainActivity.this).edit().putString("today2_" + day, r.toString()).apply();
+                        showToday(r.toString());
                     }
                 });
             }
         }).start();
     }
 
-    private static String formatToday(JSONObject o) {
-        StringBuilder sb = new StringBuilder();
-        String nd = o.optString("nameday", "");
-        if (nd.length() > 0 && !"null".equals(nd)) sb.append("svátek má ").append(nd);
-        JSONArray b = o.optJSONArray("birthdays");
-        if (b != null) {
-            for (int i = 0; i < b.length(); i++) {
+    /** Štítky pod hodinami: svátek, narozeniny (dnes – pozítří), případně státní svátek. */
+    private void showToday(String js) {
+        chips.removeAllViews();
+        try {
+            JSONObject o = new JSONObject(js);
+            String nd = o.optString("nameday", "");
+            if (nd.length() > 0 && !"null".equals(nd)) addChip(R.drawable.ic_nameday, Ui.TEAL, "svátek má " + nd);
+            JSONArray b = o.optJSONArray("birthdays");
+            for (int i = 0; b != null && i < b.length() && chips.getChildCount() < 3; i++) {
                 JSONObject x = b.optJSONObject(i);
                 int in = x.optInt("in_days", 99);
-                if (in > 2) continue; // na ploše jen dnes, zítra, pozítří
+                if (in > 2) continue;
                 String when = in == 0 ? "dnes" : in == 1 ? "zítra" : "pozítří";
-                if (sb.length() > 0) sb.append("  ·  ");
-                sb.append("🎂 ").append(when).append(" ").append(x.optString("name"));
-                if (!x.isNull("age")) sb.append(" (").append(x.optInt("age")).append(")");
+                String age = x.isNull("age") ? "" : " (" + x.optInt("age") + ")";
+                addChip(R.drawable.ic_cake, Ui.AMBER, when + " " + x.optString("name") + age);
             }
+            JSONArray hol = o.optJSONArray("holidays");
+            if (hol != null && hol.length() > 0 && chips.getChildCount() < 2) {
+                addChip(R.drawable.ic_nameday, Ui.AMBER, hol.optString(0));
+            }
+        } catch (Exception ignored) {
         }
-        JSONArray hol = o.optJSONArray("holidays");
-        if (hol != null && hol.length() > 0 && sb.length() == 0) sb.append(hol.optString(0));
-        return sb.toString();
+        chips.setVisibility(chips.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private void addChip(int icon, int iconColor, String text) {
+        LinearLayout c = Ui.chip(this, icon, iconColor, text, Ui.SOFT, Ui.TILE, .031f);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, -2);
+        if (chips.getChildCount() > 0) p.leftMargin = px(.017f);
+        chips.addView(c, p);
     }
 }

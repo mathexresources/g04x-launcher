@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
@@ -13,24 +14,40 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-/** Barvy, velikosti a pomocné funkce pro UI. Všechny rozměry jsou poměrem k výšce displeje. */
+/**
+ * Design „Ember“: teplý tmavý podklad, jantar pro budík a přehrávání, tyrkys pro počasí a rádio,
+ * čísla Space Grotesk, texty Inter. Všechny rozměry jsou poměrem k výšce displeje (480 px = 1.0).
+ */
 final class Ui {
-    static final int BG = 0xFF0B0E0D;
-    static final int TILE = 0xFF171C1A;
-    static final int TILE_PRESSED = 0xFF26302B;
-    static final int INK = 0xFFEDF2EF;
-    static final int DIM = 0xFF7E8A85;
-    static final int ACCENT = 0xFF8FE3B0;
-    static final int NIGHT = 0xFF8A2A2A;
+    static final int BG = 0xFF0F1216;
+    static final int BG_STANDBY = 0xFF07080A;
+    static final int TILE = 0xFF171B21;
+    static final int TILE_PRESSED = 0xFF232A33;
+    static final int PILL = 0xFF111419;
+    static final int LINE = 0xFF262C35;
+    static final int INK = 0xFFEEF1F4;
+    static final int SOFT = 0xFFC9D0D8;
+    static final int DIM = 0xFF9AA3AE;
+    static final int FAINT = 0xFF7C8590;
+    static final int AMBER = 0xFFF5B54A;
+    static final int AMBER_SOFT = 0xFFC8A15E;
+    static final int AMBER_BG = 0x1FF5B54A;
+    static final int ON_AMBER = 0xFF1A1408;
+    static final int TEAL = 0xFF6CC6C0;
+    static final int TEAL_BG = 0xFF1F3A39;
+    static final int ACCENT = TEAL;
+    static final int NIGHT = 0xFFC8503F;
     static final int BAD = 0xFFFF7A7A;
+
+    private static Typeface spaceLight, spaceRegular, interRegular, interSemi;
 
     private Ui() {}
 
-    /** Kratší strana displeje v px (na šířku = výška). */
     static int base(Context c) {
         DisplayMetrics dm = c.getResources().getDisplayMetrics();
         return Math.min(dm.widthPixels, dm.heightPixels);
@@ -40,21 +57,64 @@ final class Ui {
         return Math.round(base(c) * f);
     }
 
+    private static Typeface font(Context c, String file, Typeface fallback) {
+        try {
+            return Typeface.createFromAsset(c.getAssets(), "fonts/" + file);
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
+    static void loadFonts(Context c) {
+        if (interRegular != null) return;
+        spaceLight = font(c, "space_light.ttf", Typeface.create("sans-serif-light", Typeface.NORMAL));
+        spaceRegular = font(c, "space_regular.ttf", Typeface.create("sans-serif", Typeface.NORMAL));
+        interRegular = font(c, "inter_regular.ttf", Typeface.create("sans-serif", Typeface.NORMAL));
+        interSemi = font(c, "inter_semibold.ttf", Typeface.create("sans-serif-medium", Typeface.NORMAL));
+    }
+
+    /** Čísla – Space Grotesk Light / Regular. */
+    static Typeface light() {
+        return spaceLight;
+    }
+
+    static Typeface display() {
+        return spaceRegular;
+    }
+
+    /** Texty – Inter. */
+    static Typeface regular() {
+        return interRegular;
+    }
+
+    static Typeface medium() {
+        return interSemi;
+    }
+
     static TextView text(Context c, String s, float size, int color) {
+        loadFonts(c);
         TextView t = new TextView(c);
         t.setText(s);
         t.setTextColor(color);
+        t.setTypeface(interRegular);
         t.setTextSize(TypedValue.COMPLEX_UNIT_PX, base(c) * size);
         t.setIncludeFontPadding(false);
         return t;
     }
 
-    static Typeface light() {
-        return Typeface.create("sans-serif-light", Typeface.NORMAL);
+    /** Čtvercová ikona (vektor z res/drawable) obarvená na color, strana = size × výška displeje. */
+    static ImageView icon(Context c, int res, int color, float size) {
+        ImageView v = new ImageView(c);
+        v.setImageResource(res);
+        v.setImageTintList(ColorStateList.valueOf(color));
+        v.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        int s = px(c, size);
+        v.setLayoutParams(new LinearLayout.LayoutParams(s, s));
+        return v;
     }
 
-    static Typeface medium() {
-        return Typeface.create("sans-serif-medium", Typeface.NORMAL);
+    static void tint(ImageView v, int color) {
+        v.setImageTintList(ColorStateList.valueOf(color));
     }
 
     static GradientDrawable round(int color, float radius) {
@@ -64,16 +124,32 @@ final class Ui {
         return g;
     }
 
-    /** Pozadí dlaždice se stavem „stisknuto“. */
+    static GradientDrawable circle(int color) {
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(color);
+        return g;
+    }
+
+    /** Pozadí karty / dlaždice se stavem „stisknuto“. */
     static StateListDrawable tile(Context c) {
-        float r = px(c, .035f);
+        return tile(c, TILE, .046f);
+    }
+
+    static StateListDrawable tile(Context c, int color, float radius) {
+        float r = px(c, radius);
         StateListDrawable s = new StateListDrawable();
-        s.addState(new int[]{android.R.attr.state_pressed}, round(TILE_PRESSED, r));
-        s.addState(new int[]{}, round(TILE, r));
+        s.addState(new int[]{android.R.attr.state_pressed}, round(color == TILE ? TILE_PRESSED : blend(color), r));
+        s.addState(new int[]{}, round(color, r));
         return s;
     }
 
-    /** Průhledné pozadí, které při stisku zesvětlá (tlačítka v kartě hudby, lišta). */
+    private static int blend(int c) {
+        int a = c >>> 24, r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
+        return (a << 24) | (Math.min(255, r + 24) << 16) | (Math.min(255, g + 24) << 8) | Math.min(255, b + 24);
+    }
+
+    /** Průhledné pozadí, které při stisku zesvětlá. */
     static StateListDrawable press(Context c) {
         StateListDrawable s = new StateListDrawable();
         s.addState(new int[]{android.R.attr.state_pressed}, round(TILE_PRESSED, px(c, .03f)));
@@ -97,6 +173,44 @@ final class Ui {
         return p;
     }
 
+    static LinearLayout.LayoutParams left(Context c, float margin) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, -2);
+        p.leftMargin = px(c, margin);
+        return p;
+    }
+
+    /** Štítek s ikonou (svátek, narozeniny, budík…). */
+    static LinearLayout chip(Context c, int iconRes, int iconColor, String text, int textColor, int bg, float size) {
+        LinearLayout l = box(c, false);
+        l.setGravity(Gravity.CENTER_VERTICAL);
+        l.setBackground(round(bg, px(c, .5f)));
+        int ph = px(c, .025f), pv = px(c, .0125f);
+        l.setPadding(ph, pv, ph, pv);
+        l.addView(icon(c, iconRes, iconColor, size * 1.05f));
+        TextView t = text(c, text, size, textColor);
+        t.setSingleLine(true);
+        l.addView(t, left(c, .014f));
+        return l;
+    }
+
+    /** Kulaté tlačítko s ikonou (přehrávání). */
+    static LinearLayout roundButton(Context c, int iconRes, int iconColor, int bg, float size, float iconSize) {
+        LinearLayout b = box(c, false);
+        b.setGravity(Gravity.CENTER);
+        StateListDrawable s = new StateListDrawable();
+        s.addState(new int[]{android.R.attr.state_pressed}, circle(bg == 0 ? TILE_PRESSED : blend(bg)));
+        s.addState(new int[]{}, bg == 0 ? new ColorDrawable(0) : circle(bg));
+        b.setBackground(s);
+        b.addView(icon(c, iconRes, iconColor, iconSize));
+        int sz = px(c, size);
+        b.setLayoutParams(new LinearLayout.LayoutParams(sz, sz));
+        return b;
+    }
+
+    static void setIcon(LinearLayout roundButton, int res) {
+        ((ImageView) roundButton.getChildAt(0)).setImageResource(res);
+    }
+
     /** Celá obrazovka bez lišt, displej nezhasíná. */
     static void immersive(Activity a) {
         a.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -109,28 +223,41 @@ final class Ui {
                         | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
     }
 
-    /** Horní lišta „‹ Zpět · titulek · akce“ pro vedlejší obrazovky. */
-    static LinearLayout bar(final Activity a, String title, String actionLabel, View.OnClickListener action) {
-        LinearLayout bar = box(a, false);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        int pad = px(a, .03f);
-        TextView back = text(a, "‹  Zpět", .05f, ACCENT);
-        back.setTypeface(medium());
-        back.setPadding(pad, pad, pad * 2, pad);
+    /** Tlačítko „‹ Zpět“. */
+    static LinearLayout back(final Activity a) {
+        LinearLayout back = box(a, false);
+        back.setGravity(Gravity.CENTER_VERTICAL);
+        int p = px(a, .025f);
+        back.setPadding(p / 2, p, p * 3 / 2, p);
         back.setBackground(press(a));
+        back.addView(icon(a, R.drawable.ic_back, TEAL, .045f));
+        TextView t = text(a, "Zpět", .038f, TEAL);
+        t.setTypeface(medium());
+        back.addView(t, left(a, .008f));
         back.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 a.finish();
             }
         });
-        bar.addView(back);
-        TextView t = text(a, title, .05f, DIM);
+        return back;
+    }
+
+    /** Horní lišta „‹ Zpět · titulek · akce“ pro vedlejší obrazovky. */
+    static LinearLayout bar(final Activity a, String title, String actionLabel, View.OnClickListener action) {
+        LinearLayout bar = box(a, false);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        int pad = px(a, .03f);
+        bar.setPadding(pad, pad / 2, pad, 0);
+        bar.addView(back(a));
+        TextView t = text(a, title, .042f, INK);
+        t.setTypeface(medium());
         t.setGravity(Gravity.CENTER);
         bar.addView(t, lp(0, -2, 1f));
-        TextView act = text(a, actionLabel == null ? "" : actionLabel, .05f, INK);
-        act.setPadding(pad * 2, pad, pad, pad);
+        TextView act = text(a, actionLabel == null ? "" : actionLabel, .038f, INK);
+        int p = px(a, .025f);
+        act.setPadding(p * 3 / 2, p, p * 3 / 2, p);
         if (action != null) {
-            act.setBackground(press(a));
+            act.setBackground(tile(a, TILE, .035f));
             act.setOnClickListener(action);
         }
         bar.addView(act);

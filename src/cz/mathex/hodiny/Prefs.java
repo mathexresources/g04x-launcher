@@ -44,6 +44,10 @@ final class Prefs {
         return get(c).getString("api_token", "");
     }
 
+    static boolean clapEnabled(Context c) {
+        return get(c).getBoolean("clap", false);
+    }
+
     static boolean morningOnAlarm(Context c) {
         return get(c).getBoolean("morning_on_alarm", true);
     }
@@ -181,6 +185,27 @@ final class Prefs {
         });
         box.addView(test);
 
+        final android.widget.CheckBox clap = new android.widget.CheckBox(a);
+        clap.setText("👏  Tlesknutí 2× = pauza / přehrát hudbu (mikrofon)");
+        clap.setChecked(clapEnabled(a));
+        box.addView(clap);
+
+        final TextView sens = new TextView(a);
+        sens.setTextColor(Ui.DIM);
+        sens.setTextSize(12);
+        sens.setPadding(0, Ui.px(a, .02f), 0, 0);
+        box.addView(sens);
+        final android.os.Handler hh = new android.os.Handler(android.os.Looper.getMainLooper());
+        final boolean[] seen = {false};
+        hh.post(new Runnable() {
+            public void run() {
+                if (sens.isAttachedToWindow()) seen[0] = true;
+                else if (seen[0]) return; // dialog zavřený
+                sens.setText(MainActivity.sensorDebug() + "\nsvětlo teď: " + MainActivity.luxNow + " lx");
+                hh.postDelayed(this, 300);
+            }
+        });
+
         android.widget.ScrollView sv = new android.widget.ScrollView(a);
         sv.addView(box);
 
@@ -199,7 +224,12 @@ final class Prefs {
                         if (u.length() == 0) u = DEFAULT_PRINTER;
                         if (!u.startsWith("http")) u = "http://" + u;
                         get(a).edit().putString("printer", u)
-                                .putString("api_token", token.getText().toString().trim()).apply();
+                                .putString("api_token", token.getText().toString().trim())
+                                .putBoolean("clap", clap.isChecked()).apply();
+                        if (clap.isChecked() && a.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            a.requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO}, 7);
+                        }
                         String c = city.getText().toString().trim();
                         if (c.length() > 0 && !c.equals(weatherName(a))) {
                             get(a).edit().putString("w_name", c).putString("w_query", c)

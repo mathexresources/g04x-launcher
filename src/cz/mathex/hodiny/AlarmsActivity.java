@@ -57,7 +57,7 @@ public class AlarmsActivity extends Activity {
         }
         long sn = Alarms.snoozeAt(this);
         if (sn > System.currentTimeMillis()) {
-            TextView t = Ui.text(this, "😴  odloženo do " + fmt(sn) + "  · ťukni pro zrušení", .045f, Ui.ACCENT);
+            TextView t = Ui.text(this, "😴  odloženo do " + fmt(sn) + "  · ťukni pro zrušení", .045f, Ui.AMBER);
             t.setPadding(0, Ui.px(this, .02f), 0, Ui.px(this, .02f));
             t.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
@@ -88,10 +88,10 @@ public class AlarmsActivity extends Activity {
                     Ui.top(this, .01f));
             row.addView(txt, Ui.lp(0, -2, 1f));
 
-            TextView sw = Ui.text(this, a.on ? "ZAP" : "VYP", .05f, a.on ? Ui.BG : Ui.DIM);
+            TextView sw = Ui.text(this, a.on ? "ZAP" : "VYP", .05f, a.on ? Ui.ON_AMBER : Ui.DIM);
             sw.setTypeface(Ui.medium());
             sw.setGravity(Gravity.CENTER);
-            sw.setBackground(Ui.round(a.on ? Ui.ACCENT : Ui.TILE_PRESSED, Ui.px(this, .06f)));
+            sw.setBackground(Ui.round(a.on ? Ui.AMBER : Ui.TILE_PRESSED, Ui.px(this, .06f)));
             sw.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
                     List<Alarms.Alarm> all = Alarms.load(AlarmsActivity.this);
@@ -161,7 +161,7 @@ public class AlarmsActivity extends Activity {
         final int[] days = {existing != null ? existing.days : 0};
 
         // kdy zazvoní – aktualizuje se při otáčení koleček
-        final TextView when = Ui.text(this, "", .045f, Ui.ACCENT);
+        final TextView when = Ui.text(this, "", .045f, Ui.AMBER);
         box.addView(when, Ui.top(this, .02f));
 
         final LinearLayout dayRow = Ui.box(this, false);
@@ -286,8 +286,8 @@ public class AlarmsActivity extends Activity {
     private void styleDays(TextView[] views, int days) {
         for (int i = 0; i < 7; i++) {
             boolean on = (days & (1 << i)) != 0;
-            views[i].setTextColor(on ? Ui.BG : Ui.INK);
-            views[i].setBackground(Ui.round(on ? Ui.ACCENT : Ui.TILE_PRESSED, Ui.px(this, .03f)));
+            views[i].setTextColor(on ? Ui.ON_AMBER : Ui.INK);
+            views[i].setBackground(Ui.round(on ? Ui.AMBER : Ui.TILE_PRESSED, Ui.px(this, .03f)));
         }
     }
 }

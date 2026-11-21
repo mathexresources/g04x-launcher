@@ -30,6 +30,9 @@ in the order we actually did it, including the mistakes.
 
 ## What you get
 
+Design **"Ember"** (since 2.1): warm dark background, amber for alarms & playback, teal for weather & radio,
+Space Grotesk numerals, Inter text, vector icons instead of emoji.
+
 - **Home screen** (landscape 800×480): large clock, date, name day / birthdays, next alarm with countdown, weather,
   now-playing card, five icon tiles (alarms · Spotify · radio · printer · all apps).
 - **Own alarm clock** – the system clock app on the GSI just flashed a black screen, so the launcher has its own:
@@ -38,8 +41,12 @@ in the order we actually did it, including the mistakes.
 - **Standby** after 15 s without touch: only the time, the alarm (with countdown) and – if something is playing –
   music controls at the bottom that work without waking the screen. Between 22:00 and 07:00 it turns dim red
   at ~1 % brightness. Any touch outside the music bar wakes it (the first touch never launches anything).
-- **Auto brightness** from the light sensor (log curve, smoothed); standby turns red when the *room* is dark
-  (light sensor), not just by the clock. **Wave your hand** over the clock (proximity sensor) to wake it from standby.
+- **Auto brightness** from the light sensor (log curve, smoothed, ~12 % in the dark up to 100 % in sunlight);
+  standby turns red when the *room* is dark (light sensor), not just by the clock.
+  **Wave your hand** over the clock to wake it from standby – detected by the proximity sensor *and* by a quick
+  dip of the light sensor (the GSI's proximity driver may not work). Live sensor values are shown in ⚙ Settings.
+- **Double clap** (optional, ⚙ Settings, needs the microphone permission) = pause / play music, or wake from standby.
+  Audio is never stored or sent anywhere – only the loudness of 32 ms blocks is analysed on the device.
   **Burn-in protection**: standby content shifts by a few pixels every minute.
 - **Name day & birthdays** under the date ("svátek má Albert · 🎂 zítra Máma (56)") from thermoprint's `GET /api/today`;
   without the server it still shows the name day from svatky.adresa.info.
@@ -302,6 +309,7 @@ adb shell cmd package set-home-activity cz.mathex.hodiny/.MainActivity          
 adb shell cmd notification allow_listener cz.mathex.hodiny/cz.mathex.hodiny.MediaListener   # music card
 adb shell appops set cz.mathex.hodiny SYSTEM_ALERT_WINDOW allow        # alarm can pop over other apps
 adb shell appops set cz.mathex.hodiny REQUEST_INSTALL_PACKAGES allow   # self-update
+adb shell pm grant cz.mathex.hodiny android.permission.RECORD_AUDIO     # optional: double clap
 adb shell dumpsys deviceidle whitelist +cz.mathex.hodiny
 adb shell input keyevent KEYCODE_HOME
 ```
@@ -401,7 +409,10 @@ src/cz/mathex/hodiny/
   Updater.java          GitHub Releases check + PackageInstaller session
   UpdateReceiver.java   install result / confirmation dialog
   MediaListener.java    empty NotificationListenerService (needed for MediaSession access)
-  Ui.java               colours, sizes, helpers
+  ClapDetector.java     double-clap detection from the microphone (loudness only)
+  Ui.java               "Ember" colours, fonts, icons, sizes, helpers
+assets/fonts/           Space Grotesk + Inter (static Latin-Ext subsets, SIL OFL – licences included)
+res/drawable/           vector icons
 ```
 
 ---
@@ -424,5 +435,6 @@ src/cz/mathex/hodiny/
 - [bkerler/mtkclient](https://github.com/bkerler/mtkclient) – the BROM exploit that makes all of this possible
 - [octathorp/x04g_tools](https://github.com/octathorp/x04g_tools) and the XDA development thread
 - [View Assist](https://dinki.github.io/View-Assist/) guide for the Xiaomi Smart Clock
-- [wttr.in](https://wttr.in) for weather
+- [wttr.in](https://wttr.in) for weather, [radio-browser.info](https://www.radio-browser.info) for radio stations
+- [Space Grotesk](https://github.com/floriankarsten/space-grotesk) and [Inter](https://rsms.me/inter/) fonts (SIL OFL 1.1)
 - Written with Claude (Anthropic) in one long chat. Vibe coded, human tested.
