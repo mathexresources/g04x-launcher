@@ -20,9 +20,9 @@ Při prvním sestavení se vytvoří `hodiny.keystore` – **schovej si ho**, ji
 
 ## Vydání nové verze (vzdálená aktualizace)
 
-1. Zvyš `versionCode` a `versionName` v `AndroidManifest.xml`, commitni.
-2. `git tag v<verze> && git push origin v<verze>` – GitHub Action (`.github/workflows/release.yml`) sestaví
-   podepsané APK a vytvoří Release. Potřebuje secret `KEYSTORE_B64` (base64 z `hodiny.keystore`).
+1. Zvyš `versionCode` a `versionName` v `AndroidManifest.xml` a pushni do `main`.
+2. GitHub Action (`.github/workflows/release.yml`) sestaví podepsané APK a vytvoří Release `v<verze>`
+   (jen pokud ještě neexistuje). Potřebuje secret `KEYSTORE_B64` (base64 z `hodiny.keystore`).
    Alternativa bez Actions: `./release.sh "co je nového"` (lokálně, potřebuje `gh`).
 3. Na hodinách: podrž počasí (nebo ⋯ → ⚙ Nastavení) → **⟳ Aktualizovat** → potvrdit instalaci.
 

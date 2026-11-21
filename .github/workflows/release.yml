@@ -1,10 +1,12 @@
 name: release
 
-# Push tagu v<verze> (stejné jako versionName v AndroidManifest.xml) → podepsané APK v GitHub Releases.
-# Hodiny si ho stáhnou přes ⚙ Nastavení → ⟳ Aktualizovat.
+# Změna versionName v AndroidManifest.xml na main → podepsané APK v GitHub Releases (tag v<verze>).
+# Hodiny si ho stáhnou přes ⚙ Nastavení → ⟳ Aktualizovat. Když release pro verzi už existuje, nic se neděje.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths: ['AndroidManifest.xml', 'src/**', 'res/**', '.github/workflows/release.yml']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,19 +17,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Kontrola verze
+      - name: Verze
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           VER=$(grep -o 'versionName="[^"]*"' AndroidManifest.xml | cut -d'"' -f2)
-          if [ "v$VER" != "$GITHUB_REF_NAME" ]; then
-            echo "Tag $GITHUB_REF_NAME nesedí s versionName $VER v AndroidManifest.xml"; exit 1
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+          if gh release view "v$VER" >/dev/null 2>&1; then
+            echo "Release v$VER už existuje – pro nové vydání zvyš versionName."
+            echo "skip=1" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Android nástroje
+        if: steps.ver.outputs.skip != '1'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq android-sdk-platform-23 aapt dalvik-exchange apksigner zipalign
 
       - name: Podpisový klíč
+        if: steps.ver.outputs.skip != '1'
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
         run: |
@@ -35,13 +44,15 @@ jobs:
           echo "$KEYSTORE_B64" | base64 -d > hodiny.keystore
 
       - name: Sestavení
+        if: steps.ver.outputs.skip != '1'
         run: ./build.sh
 
       - name: Release
+        if: steps.ver.outputs.skip != '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VER=${GITHUB_REF_NAME#v}
+          VER=${{ steps.ver.outputs.ver }}
           cp Hodiny.apk "Hodiny-$VER.apk"
-          gh release create "$GITHUB_REF_NAME" "Hodiny-$VER.apk" --title "Hodiny $VER" \
-            --notes "$(git log -1 --pretty=%B "$GITHUB_REF_NAME" | grep -v -e '^Co-Authored-By' -e '^Claude-Session')"
+          gh release create "v$VER" "Hodiny-$VER.apk" --target "$GITHUB_SHA" --title "Hodiny $VER" \
+            --notes "$(git log -1 --pretty=%B | grep -v -e '^Co-Authored-By' -e '^Claude-Session')"
