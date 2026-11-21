@@ -41,8 +41,8 @@ in the order we actually did it, including the mistakes.
 - **Weather** from [wttr.in](https://wttr.in) (no API key): current temp, condition, min/max, rain chance,
   next hours. Default location is Prague (by coordinates); tap = refresh, long-press = settings.
 - **Music card** for whatever is playing (Spotify, SoundCloud, …) via Android MediaSession.
-- **Printer tile** opens the `/clock` page of [thermoprint-server](https://github.com/mathexresources/thermoprint-server)
-  in a built-in WebView.
+- **Printer tile** – native control panel for [thermoprint-server](https://github.com/mathexresources/thermoprint-server)
+  via its API: printer / queue / website status and 8 big print buttons.
 - **Morning report on alarm dismiss** – each alarm has a *🖨 print morning report* checkbox; tapping *Vypnout* (stop)
   on such an alarm calls the thermoprint API and prints the morning receipt, instead of printing it at a fixed time.
 - **Remote self-update** from GitHub Releases (⚙ Settings → ⟳ Aktualizovat).
@@ -353,10 +353,10 @@ The connect port changes after every reboot – give the clock a DHCP reservatio
 
 ## Thermal printer integration
 
-The 🖨 tile opens `http://192.168.0.101:8630/clock` – a simple 800×480 page added to
-[thermoprint-server](https://github.com/mathexresources/thermoprint-server) with big buttons (morning report, todo,
-shopping list, site status, Moodle, planes, xkcd, test) and printer/site status. Log in once as admin; the session
-lasts 60 days.
+The 🖨 tile opens a native screen that talks to [thermoprint-server](https://github.com/mathexresources/thermoprint-server)
+over its API (`GET /api/status`, `POST /api/print/<what>`, Bearer token from the launcher settings): printer / queue /
+website status and big buttons for morning report, todo, shopping list, site status, Moodle, planes, xkcd and a test
+print. (Version ≤ 1.8 used the `/clock` web page in a WebView instead – the native screen is lighter and needs no login.)
 
 Morning report on alarm dismiss: in thermoprint settings untick *"Tisknout každé ráno"* and generate an **API token**,
 put it into the launcher settings and tick *🖨 Po vypnutí vytisknout ranní zprávu* on the alarm. On *Vypnout* the
@@ -385,7 +385,7 @@ src/cz/mathex/hodiny/
   AlarmsActivity.java   alarm list + edit dialog
   AlarmReceiver.java    fires the alarm, reschedules after boot / time change / update
   RingActivity.java     ringing screen (snooze / stop), morning print trigger
-  WebActivity.java      printer page in a WebView
+  PrinterActivity.java  native printer control panel (thermoprint API)
   AppsActivity.java     app drawer
   Prefs.java            settings dialog, HTTP helper, thermoprint API call
   Updater.java          GitHub Releases check + PackageInstaller session

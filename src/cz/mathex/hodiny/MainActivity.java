@@ -187,7 +187,7 @@ public class MainActivity extends Activity {
         });
         addTile(tiles, "🖨", new Runnable() {
             public void run() {
-                startActivity(new Intent(MainActivity.this, WebActivity.class));
+                startActivity(new Intent(MainActivity.this, PrinterActivity.class));
             }
         });
         addTile(tiles, "⋯", new Runnable() {

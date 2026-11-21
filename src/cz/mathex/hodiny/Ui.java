@@ -26,6 +26,7 @@ final class Ui {
     static final int DIM = 0xFF7E8A85;
     static final int ACCENT = 0xFF8FE3B0;
     static final int NIGHT = 0xFF8A2A2A;
+    static final int BAD = 0xFFFF7A7A;
 
     private Ui() {}
 

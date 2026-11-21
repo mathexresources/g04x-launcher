@@ -18,7 +18,7 @@ import java.net.URL;
 
 /** Nastavení (město pro počasí, adresa tiskárny) a HTTP helper. */
 final class Prefs {
-    static final String DEFAULT_PRINTER = "http://192.168.0.101:8630/clock";
+    static final String DEFAULT_PRINTER = "http://192.168.0.101:8630";
 
     private Prefs() {}
 
@@ -153,7 +153,7 @@ final class Prefs {
         city.setText(weatherName(a));
         box.addView(city);
 
-        box.addView(label(a, "Adresa tiskárny"));
+        box.addView(label(a, "Adresa thermoprint-serveru"));
         final EditText url = new EditText(a);
         url.setSingleLine(true);
         url.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
