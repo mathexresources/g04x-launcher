@@ -42,7 +42,12 @@ jobs:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
         run: |
           if [ -z "$KEYSTORE_B64" ]; then echo "Chybí secret KEYSTORE_B64"; exit 1; fi
-          echo "$KEYSTORE_B64" | base64 -d > hodiny.keystore
+          echo "$KEYSTORE_B64" | tr -d ' \r\n' | base64 -d > hodiny.keystore
+          echo "sha256 klíče: $(sha256sum hodiny.keystore | cut -d' ' -f1)"
+          if ! keytool -list -keystore hodiny.keystore -storepass hodiny >/dev/null 2>&1; then
+            echo "::error::KEYSTORE_B64 není platný keystore – vlož výstup 'base64 -w0 hodiny.keystore' (jeden řádek, nic navíc)"
+            exit 1
+          fi
 
       - name: Sestavení
         if: steps.ver.outputs.skip != '1'
