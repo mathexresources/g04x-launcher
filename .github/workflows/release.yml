@@ -2,6 +2,7 @@ name: release
 
 # Změna versionName v AndroidManifest.xml na main → podepsané APK v GitHub Releases (tag v<verze>).
 # Hodiny si ho stáhnou přes ⚙ Nastavení → ⟳ Aktualizovat. Když release pro verzi už existuje, nic se neděje.
+# Ruční spuštění: Actions → release → Run workflow.
 on:
   push:
     branches: [main]
