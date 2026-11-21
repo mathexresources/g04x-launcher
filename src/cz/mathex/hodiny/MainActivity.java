@@ -89,6 +89,9 @@ public class MainActivity extends Activity {
     private ComponentName listener;
     private boolean needMediaPermission;
 
+    private VolumeOverlay volume;
+    /** Poslední stisknutá klávesa (pro zjištění kódu tlačítka Mute v nastavení). */
+    static volatile String lastKey = "–";
     private long lastTouch = System.currentTimeMillis();
     private boolean swallowTouch;
 
@@ -483,6 +486,14 @@ public class MainActivity extends Activity {
         setStandby(false); // launcher se zpět nezavírá
     }
 
+    @Override
+    public boolean onKeyDown(int code, android.view.KeyEvent e) {
+        lastKey = android.view.KeyEvent.keyCodeToString(code) + " (" + code + ")";
+        if (volume == null) volume = new VolumeOverlay(this);
+        if (volume.onKeyDown(code)) return true;
+        return super.onKeyDown(code, e);
+    }
+
     private static boolean inside(View v, MotionEvent e) {
         if (v.getVisibility() != View.VISIBLE) return false;
         int[] loc = new int[2];
@@ -673,7 +684,7 @@ public class MainActivity extends Activity {
 
     /** Živé hodnoty pro nastavení. */
     static String sensorDebug() {
-        return sensorInfo + "\nteď: přiblížení " + lastProx + " · mikrofon špička " + ClapDetector.lastPeak
+        return sensorInfo + "\nposlední tlačítko: " + lastKey + "\nteď: přiblížení " + lastProx + " · mikrofon špička " + ClapDetector.lastPeak
                 + " / pozadí " + ClapDetector.lastBg;
     }
 

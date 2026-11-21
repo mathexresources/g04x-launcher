@@ -114,6 +114,15 @@ public class RadioActivity extends Activity {
         render();
     }
 
+    private VolumeOverlay volume;
+
+    @Override
+    public boolean onKeyDown(int code, KeyEvent e) {
+        if (volume == null) volume = new VolumeOverlay(this);
+        if (volume.onKeyDown(code)) return true;
+        return super.onKeyDown(code, e);
+    }
+
     private void later() {
         h.postDelayed(new Runnable() {
             public void run() {
