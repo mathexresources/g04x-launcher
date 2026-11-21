@@ -18,7 +18,6 @@ import android.media.session.PlaybackState;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.provider.AlarmClock;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -42,7 +41,6 @@ public class MainActivity extends Activity {
     private static final long WEATHER_EVERY = 15 * 60 * 1000L;
     private static final long NIGHT_IDLE = 60 * 1000L;
     private static final String SPOTIFY = "com.spotify.music";
-    private static final String WEATHER_APP = "org.breezyweather";
 
     private final Handler h = new Handler(Looper.getMainLooper());
     private final SimpleDateFormat dateFmt = new SimpleDateFormat("EEEE d. MMMM", CS);
@@ -105,7 +103,8 @@ public class MainActivity extends Activity {
         right.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         right.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                Ui.launch(MainActivity.this, WEATHER_APP, "Breezy Weather");
+                wDesc.setText("aktualizuji…");
+                loadWeather();
             }
         });
         right.setOnLongClickListener(new View.OnLongClickListener() {
@@ -204,11 +203,6 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(MainActivity.this, WebActivity.class));
             }
         });
-        addTile(tiles, "🌤", "Počasí", new Runnable() {
-            public void run() {
-                Ui.launch(MainActivity.this, WEATHER_APP, "Breezy Weather");
-            }
-        });
         addTile(tiles, "⋯", "Aplikace", new Runnable() {
             public void run() {
                 startActivity(new Intent(MainActivity.this, AppsActivity.class));
@@ -229,6 +223,7 @@ public class MainActivity extends Activity {
         msm = (MediaSessionManager) getSystemService(Context.MEDIA_SESSION_SERVICE);
         listener = new ComponentName(this, MediaListener.class);
         showCachedWeather();
+        Alarms.schedule(this);
     }
 
     private int px(float f) {
@@ -413,30 +408,23 @@ public class MainActivity extends Activity {
     }
 
     private void showAlarms() {
-        try {
-            startActivity(new Intent(AlarmClock.ACTION_SHOW_ALARMS));
-        } catch (ActivityNotFoundException e) {
-            Ui.launch(this, "com.android.deskclock", "Budík");
-        }
+        startActivity(new Intent(this, AlarmsActivity.class));
     }
 
-    // ------------------------------------------------------------------ počasí (Open-Meteo)
+    // ------------------------------------------------------------------ počasí (wttr.in)
     private boolean weatherLoading;
 
     private void loadWeather() {
         if (weatherLoading) return;
         weatherLoading = true;
-        final double lat = Prefs.lat(this), lon = Prefs.lon(this);
+        final String q = Prefs.weatherQuery(this);
         new Thread(new Runnable() {
             public void run() {
                 String js = null;
                 try {
-                    js = Prefs.http("https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon
-                            + "&current=temperature_2m,weather_code,is_day"
-                            + "&hourly=temperature_2m,weather_code"
-                            + "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max"
-                            + "&timezone=auto&forecast_days=2");
-                    new JSONObject(js); // validace
+                    js = Prefs.http("https://wttr.in/" + java.net.URLEncoder.encode(q, "UTF-8").replace("+", "%20")
+                            + "?format=j1&lang=cs");
+                    new JSONObject(js).getJSONArray("current_condition"); // validace
                 } catch (Exception e) {
                     js = null;
                 }
@@ -451,9 +439,9 @@ public class MainActivity extends Activity {
                         } else {
                             // zkusit znovu za 2 minuty
                             Prefs.get(MainActivity.this).edit().putLong("weather_ts", now - WEATHER_EVERY + 120000).apply();
-                            if (Prefs.get(MainActivity.this).getString("weather", null) == null) {
-                                wDesc.setText("počasí nedostupné");
-                            }
+                            String cached = Prefs.get(MainActivity.this).getString("weather", null);
+                            if (cached == null) wDesc.setText("počasí nedostupné");
+                            else showWeather(cached);
                         }
                     }
                 });
@@ -466,40 +454,58 @@ public class MainActivity extends Activity {
         if (js != null) showWeather(js);
     }
 
+    private static String val(JSONObject o, String key) {
+        JSONArray a = o.optJSONArray(key);
+        if (a == null || a.length() == 0) return null;
+        JSONObject v = a.optJSONObject(0);
+        return v != null ? v.optString("value", null) : null;
+    }
+
+    private static long num(JSONObject o, String key) {
+        try {
+            return Math.round(Double.parseDouble(o.getString(key)));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     private void showWeather(String js) {
         try {
             JSONObject o = new JSONObject(js);
-            JSONObject cur = o.getJSONObject("current");
-            int code = cur.getInt("weather_code");
-            boolean day = cur.optInt("is_day", 1) == 1;
+            JSONObject cur = o.getJSONArray("current_condition").getJSONObject(0);
+            int code = (int) num(cur, "weatherCode");
+            Calendar now = Calendar.getInstance();
+            int hr = now.get(Calendar.HOUR_OF_DAY);
+            boolean day = hr >= 7 && hr < 19;
             wIcon.setText(icon(code, day));
-            wTemp.setText(Math.round(cur.getDouble("temperature_2m")) + "°");
-            wDesc.setText(Prefs.city(this) + " · " + describe(code));
+            wTemp.setText(num(cur, "temp_C") + "°");
+            String desc = val(cur, "lang_cs");
+            if (desc == null || desc.trim().length() == 0) desc = describe(code);
+            wDesc.setText(Prefs.weatherName(this) + " · " + desc.trim().toLowerCase(new Locale("cs", "CZ")));
 
-            JSONObject d = o.getJSONObject("daily");
-            long max = Math.round(d.getJSONArray("temperature_2m_max").getDouble(0));
-            long min = Math.round(d.getJSONArray("temperature_2m_min").getDouble(0));
-            int rain = d.getJSONArray("precipitation_probability_max").optInt(0, 0);
-            wRange.setText("↑" + max + "°  ↓" + min + "°" + (rain >= 20 ? "   ☂ " + rain + " %" : ""));
-
-            // další hodiny po dvou
-            JSONObject hr = o.getJSONObject("hourly");
-            JSONArray times = hr.getJSONArray("time");
-            JSONArray temps = hr.getJSONArray("temperature_2m");
-            String nowHour = cur.getString("time").substring(0, 13);
-            int idx = -1;
-            for (int i = 0; i < times.length(); i++) {
-                if (times.getString(i).startsWith(nowHour)) {
-                    idx = i;
-                    break;
-                }
+            JSONArray days = o.getJSONArray("weather");
+            JSONObject today = days.getJSONObject(0);
+            JSONArray hourly = today.getJSONArray("hourly");
+            int rain = 0;
+            for (int i = 0; i < hourly.length(); i++) {
+                JSONObject h = hourly.getJSONObject(i);
+                if (Integer.parseInt(h.getString("time")) / 100 + 3 > hr) rain = Math.max(rain, (int) num(h, "chanceofrain"));
             }
+            wRange.setText("↑" + num(today, "maxtempC") + "°  ↓" + num(today, "mintempC") + "°"
+                    + (rain >= 20 ? "   ☂ " + rain + " %" : ""));
+
+            // další 4 tříhodinové úseky (wttr má hodnoty po 3 h), i přes půlnoc
             StringBuilder sb = new StringBuilder();
-            if (idx >= 0) {
-                for (int k = 2; k <= 8 && idx + k < times.length(); k += 2) {
+            int shown = 0;
+            for (int d = 0; d < days.length() && shown < 4; d++) {
+                JSONArray hs = days.getJSONObject(d).getJSONArray("hourly");
+                for (int i = 0; i < hs.length() && shown < 4; i++) {
+                    JSONObject h = hs.getJSONObject(i);
+                    int at = Integer.parseInt(h.getString("time")) / 100;
+                    if (d == 0 && at <= hr) continue;
                     if (sb.length() > 0) sb.append("   ");
-                    String hh = times.getString(idx + k).substring(11, 13);
-                    sb.append(Integer.parseInt(hh)).append("h ").append(Math.round(temps.getDouble(idx + k))).append("°");
+                    sb.append(at).append("h ").append(num(h, "tempC")).append("°");
+                    shown++;
                 }
             }
             wHours.setText(sb.toString());
@@ -508,43 +514,35 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Kódy počasí World Weather Online (používá je wttr.in). */
     private static String icon(int c, boolean day) {
-        if (c == 0) return day ? "☀️" : "🌙";
-        if (c == 1) return day ? "🌤" : "🌙";
-        if (c == 2) return "⛅";
-        if (c == 3) return "☁️";
-        if (c == 45 || c == 48) return "🌫";
-        if (c >= 51 && c <= 57) return "🌦";
-        if (c >= 61 && c <= 67) return "🌧";
-        if (c >= 71 && c <= 77) return "🌨";
-        if (c >= 80 && c <= 82) return "🌦";
-        if (c == 85 || c == 86) return "🌨";
-        if (c >= 95) return "⛈";
-        return "🌡";
+        switch (c) {
+            case 113: return day ? "☀️" : "🌙";
+            case 116: return day ? "⛅" : "☁️";
+            case 119: case 122: return "☁️";
+            case 143: case 248: case 260: return "🌫";
+            case 200: case 386: case 389: case 392: case 395: return "⛈";
+            case 227: case 230: case 323: case 326: case 329: case 332: case 335: case 338: case 368: case 371:
+                return "🌨";
+            case 176: case 263: case 266: case 293: case 296: case 353: return "🌦";
+            default: return "🌧";
+        }
     }
 
     private static String describe(int c) {
         switch (c) {
-            case 0: return "jasno";
-            case 1: return "skoro jasno";
-            case 2: return "polojasno";
-            case 3: return "zataženo";
-            case 45: case 48: return "mlha";
-            case 51: case 53: case 55: return "mrholení";
-            case 56: case 57: return "mrznoucí mrholení";
-            case 61: return "slabý déšť";
-            case 63: return "déšť";
-            case 65: return "silný déšť";
-            case 66: case 67: return "mrznoucí déšť";
-            case 71: return "slabé sněžení";
-            case 73: return "sněžení";
-            case 75: return "silné sněžení";
-            case 77: return "sněhová zrna";
-            case 80: case 81: case 82: return "přeháňky";
-            case 85: case 86: return "sněhové přeháňky";
-            case 95: return "bouřka";
-            case 96: case 99: return "bouřka s kroupami";
-            default: return "";
+            case 113: return "jasno";
+            case 116: return "polojasno";
+            case 119: return "oblačno";
+            case 122: return "zataženo";
+            case 143: case 248: case 260: return "mlha";
+            case 176: case 263: case 266: case 293: case 296: case 353: return "slabý déšť";
+            case 299: case 302: case 356: return "déšť";
+            case 305: case 308: case 359: return "silný déšť";
+            case 323: case 326: case 368: return "slabé sněžení";
+            case 329: case 332: case 335: case 338: case 371: case 227: case 230: return "sněžení";
+            case 200: case 386: case 389: case 392: case 395: return "bouřka";
+            default: return "srážky";
         }
     }
 

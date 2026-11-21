@@ -9,16 +9,11 @@ import android.text.InputType;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
 
 /** Nastavení (město pro počasí, adresa tiskárny) a HTTP helper. */
 final class Prefs {
@@ -30,16 +25,14 @@ final class Prefs {
         return c.getSharedPreferences("hodiny", Context.MODE_PRIVATE);
     }
 
-    static String city(Context c) {
-        return get(c).getString("city", "Pardubice");
+    /** Název místa zobrazený u počasí. */
+    static String weatherName(Context c) {
+        return get(c).getString("w_name", "Škvorec");
     }
 
-    static double lat(Context c) {
-        return Double.parseDouble(get(c).getString("lat", "50.0343"));
-    }
-
-    static double lon(Context c) {
-        return Double.parseDouble(get(c).getString("lon", "15.7812"));
+    /** Dotaz pro wttr.in – výchozí jsou souřadnice Škvorce, ať se netrefí jiná obec stejného jména. */
+    static String weatherQuery(Context c) {
+        return get(c).getString("w_query", "50.047,14.730");
     }
 
     static String printerUrl(Context c) {
@@ -70,10 +63,10 @@ final class Prefs {
         LinearLayout box = Ui.box(a, true);
         box.setPadding(pad, pad / 2, pad, 0);
 
-        box.addView(label(a, "Město pro počasí"));
+        box.addView(label(a, "Místo pro počasí (obec nebo „šířka,délka“)"));
         final EditText city = new EditText(a);
         city.setSingleLine(true);
-        city.setText(city(a));
+        city.setText(weatherName(a));
         box.addView(city);
 
         box.addView(label(a, "Adresa tiskárny"));
@@ -94,11 +87,11 @@ final class Prefs {
                         if (!u.startsWith("http")) u = "http://" + u;
                         get(a).edit().putString("printer", u).apply();
                         String c = city.getText().toString().trim();
-                        if (c.length() > 0 && !c.equalsIgnoreCase(city(a))) {
-                            geocode(a, c, done);
-                        } else if (done != null) {
-                            done.run();
+                        if (c.length() > 0 && !c.equals(weatherName(a))) {
+                            get(a).edit().putString("w_name", c).putString("w_query", c)
+                                    .putLong("weather_ts", 0).remove("weather").apply();
                         }
+                        if (done != null) done.run();
                     }
                 })
                 .show();
@@ -110,39 +103,5 @@ final class Prefs {
         t.setTextColor(Ui.DIM);
         t.setPadding(0, Ui.px(a, .03f), 0, 0);
         return t;
-    }
-
-    private static void geocode(final Activity a, final String name, final Runnable done) {
-        new Thread(new Runnable() {
-            public void run() {
-                String msg;
-                try {
-                    String js = http("https://geocoding-api.open-meteo.com/v1/search?count=1&language=cs&format=json&name="
-                            + URLEncoder.encode(name, "UTF-8"));
-                    JSONArray res = new JSONObject(js).optJSONArray("results");
-                    if (res == null || res.length() == 0) {
-                        msg = "Město „" + name + "“ jsem nenašel";
-                    } else {
-                        JSONObject r = res.getJSONObject(0);
-                        get(a).edit()
-                                .putString("city", r.getString("name"))
-                                .putString("lat", String.valueOf(r.getDouble("latitude")))
-                                .putString("lon", String.valueOf(r.getDouble("longitude")))
-                                .putLong("weather_ts", 0)
-                                .apply();
-                        msg = "Počasí pro: " + r.getString("name");
-                    }
-                } catch (Exception e) {
-                    msg = "Nepodařilo se najít město (síť?)";
-                }
-                final String m = msg;
-                a.runOnUiThread(new Runnable() {
-                    public void run() {
-                        Toast.makeText(a, m, Toast.LENGTH_SHORT).show();
-                        if (done != null) done.run();
-                    }
-                });
-            }
-        }).start();
     }
 }
