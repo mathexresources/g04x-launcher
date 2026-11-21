@@ -38,9 +38,10 @@ Space Grotesk numerals, Inter text, vector icons instead of emoji.
 - **Own alarm clock** – the system clock app on the GSI just flashed a black screen, so the launcher has its own:
   one-off by default ("ring at the next 6:30"), optional repeat days, snooze 9 min, any hardware button = snooze,
   auto-snooze after 10 min, survives reboots. Ducks Spotify while ringing.
-- **Standby** after 15 s without touch: only the time, the alarm (with countdown) and – if something is playing –
-  music controls at the bottom that work without waking the screen. Between 22:00 and 07:00 it turns dim red
-  at ~1 % brightness. Any touch outside the music bar wakes it (the first touch never launches anything).
+- **Standby** after 15 s without touch: date, big time, the alarm (with countdown) and – if something is playing –
+  music controls at the bottom that work without waking the screen. Same brightness as the home screen
+  (a red night mode existed in 2.0–2.1 and was removed). Any touch outside the music bar wakes it
+  (the first touch never launches anything).
 - **Auto brightness** from the light sensor (log curve, smoothed, ~12 % in the dark up to 100 % in sunlight);
   standby turns red when the *room* is dark (light sensor), not just by the clock.
   **Wave your hand** over the clock to wake it from standby – detected by the proximity sensor *and* by a quick

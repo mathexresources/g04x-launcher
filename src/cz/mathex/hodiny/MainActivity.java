@@ -560,9 +560,9 @@ public class MainActivity extends Activity {
         sbMedia.setTranslationX(r.nextInt(2 * m + 1) - m);
     }
 
-    /** Přes den bílý text a jantar, ve tmě vše tlumeně červené na černé. */
+    /** Standby má vždy stejný vzhled (červený noční režim byl na přání vypnut). */
     private void styleStandby() {
-        boolean dark = isDark();
+        boolean dark = false;
         standby.setBackgroundColor(dark ? 0xFF000000 : Ui.BG_STANDBY);
         sbDate.setVisibility(dark ? View.GONE : View.VISIBLE);
         sbClock.setTextColor(dark ? Ui.NIGHT : Ui.INK);
@@ -582,17 +582,15 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Jas z luxů (logaritmicky), plynule. Úrovně jsou schválně světlejší:
-     * tma ~12 %, pokoj večer ~45 %, den ~75 %, slunce 100 %. Tmavý standby ~4 %.
+     * Jas z luxů (logaritmicky), plynule: tma ~12 %, pokoj večer ~45 %, den ~75 %, slunce 100 %.
+     * Standby má stejný jas jako plocha.
      */
     private void applyBrightness() {
         WindowManager.LayoutParams lp = getWindow().getAttributes();
-        if (standbyOn && isDark()) {
-            lp.screenBrightness = 0.04f;
-        } else if (lightSensor == null || bright < 0) {
+        if (lightSensor == null || bright < 0) {
             lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
         } else {
-            lp.screenBrightness = Math.max(0.08f, standbyOn ? bright * 0.85f : bright);
+            lp.screenBrightness = Math.max(0.12f, bright);
         }
         getWindow().setAttributes(lp);
     }
