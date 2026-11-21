@@ -12,6 +12,7 @@ import android.widget.TextView;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
@@ -58,41 +59,68 @@ final class Prefs {
     }
 
     /**
-     * Po vypnutí budíku vytiskne ranní zprávu přes API thermoprint-serveru (nejvýš jednou denně).
+     * Vytiskne ranní zprávu přes API thermoprint-serveru. Bez force nejvýš jednou denně (po vypnutí budíku).
+     * Za den se označí až po úspěšném odeslání. Výsledek ukáže jako toast.
      * Vrací false, když je funkce vypnutá nebo chybí token.
      */
-    static boolean printMorning(final Context c) {
+    static boolean printMorning(final Context ctx, final boolean force) {
+        final Context c = ctx.getApplicationContext();
         final String token = apiToken(c);
-        if (!morningOnAlarm(c) || token.length() == 0) return false;
+        if (token.length() == 0) {
+            if (force) toast(c, "Chybí API token tiskárny (nastavení)");
+            return false;
+        }
+        if (!force && !morningOnAlarm(c)) return false;
         final String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date());
-        if (today.equals(get(c).getString("morning_printed", ""))) return false;
-        get(c).edit().putString("morning_printed", today).apply();
+        if (!force && today.equals(get(c).getString("morning_printed", ""))) return false;
         final String url = printerBase(c) + "/api/print/morning";
         new Thread(new Runnable() {
             public void run() {
+                String result = "Server tiskárny nedostupný (" + printerBase(c) + ")";
                 for (int attempt = 0; attempt < 5; attempt++) { // Wi-Fi se po ránu může chvíli probouzet
+                    int code = -1;
                     try {
                         HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
                         con.setRequestMethod("POST");
                         con.setConnectTimeout(8000);
                         con.setReadTimeout(30000);
                         con.setRequestProperty("Authorization", "Bearer " + token);
+                        con.setRequestProperty("Content-Type", "application/json");
                         con.setDoOutput(true);
-                        con.getOutputStream().close();
-                        int code = con.getResponseCode();
+                        OutputStream os = con.getOutputStream();
+                        os.write("{}".getBytes("UTF-8"));
+                        os.close();
+                        code = con.getResponseCode();
                         con.disconnect();
-                        if (code < 500 && code != 0) return; // 200 = tiskne se, 401 = špatný token (opakovat nemá smysl)
                     } catch (Exception ignored) {
                     }
+                    if (code >= 200 && code < 300) {
+                        get(c).edit().putString("morning_printed", today).apply();
+                        result = "🖨  Ranní zpráva se tiskne";
+                        break;
+                    }
+                    if (code == 401) { result = "Tiskárna: špatný API token"; break; }
+                    if (code == 404) { result = "Server nezná /api/print/morning – je adresa tiskárny správně?"; break; }
+                    if (code == 502) result = "Tiskárna: server nenačetl data pro ranní zprávu";
+                    else if (code > 0) result = "Tiskárna: chyba serveru " + code;
                     try {
                         Thread.sleep(10000);
                     } catch (InterruptedException e) {
-                        return;
+                        break;
                     }
                 }
+                toast(c, result);
             }
         }).start();
         return true;
+    }
+
+    static void toast(final Context c, final String msg) {
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
+            public void run() {
+                android.widget.Toast.makeText(c, msg, android.widget.Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     static String http(String url) throws Exception {
@@ -143,6 +171,20 @@ final class Prefs {
         morning.setText("Po vypnutí budíku vytisknout ranní zprávu");
         morning.setChecked(morningOnAlarm(a));
         box.addView(morning);
+
+        TextView test = new TextView(a);
+        test.setText("🖨  Vyzkoušet ranní tisk (s tokenem výše)");
+        test.setTextColor(Ui.ACCENT);
+        test.setPadding(0, Ui.px(a, .03f), 0, Ui.px(a, .02f));
+        test.setOnClickListener(new android.view.View.OnClickListener() {
+            public void onClick(android.view.View v) {
+                get(a).edit().putString("api_token", token.getText().toString().trim())
+                        .putString("printer", url.getText().toString().trim().length() > 0
+                                ? url.getText().toString().trim() : DEFAULT_PRINTER).apply();
+                if (printMorning(a, true)) android.widget.Toast.makeText(a, "Posílám…", android.widget.Toast.LENGTH_SHORT).show();
+            }
+        });
+        box.addView(test);
 
         android.widget.ScrollView sv = new android.widget.ScrollView(a);
         sv.addView(box);
