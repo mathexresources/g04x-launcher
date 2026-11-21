@@ -329,7 +329,7 @@ public class MainActivity extends Activity {
         sbDate = Ui.text(this, "", .044f, Ui.DIM);
         sbDate.setGravity(Gravity.CENTER_HORIZONTAL);
         sbCenter.addView(sbDate, new LinearLayout.LayoutParams(-2, -2));
-        sbClock = Ui.text(this, "", .48f, Ui.INK);
+        sbClock = Ui.text(this, "", .42f, Ui.INK);
         sbClock.setTypeface(Ui.display());
         sbClock.setLetterSpacing(-0.045f);
         sbCenter.addView(sbClock, Ui.top(this, .02f));
@@ -344,35 +344,45 @@ public class MainActivity extends Activity {
         sbAlarm.addView(sbAlarmLeft, Ui.left(this, .012f));
         sbCenter.addView(sbAlarm, Ui.top(this, .045f));
         FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(-1, -1);
-        cp.bottomMargin = px(.15f);
         standby.addView(sbCenter, cp);
 
+        // přehrávání ve standby: široká karta dole, velká tlačítka (ovládá se bez probuzení)
         sbMedia = Ui.box(this, false);
         sbMedia.setGravity(Gravity.CENTER_VERTICAL);
-        sbMedia.setBackground(Ui.round(Ui.PILL, px(.5f)));
-        sbMedia.setPadding(px(.0375f), px(.012f), px(.02f), px(.012f));
-        sbMediaIcon = Ui.icon(this, R.drawable.ic_radio, Ui.TEAL, .046f);
-        sbMedia.addView(sbMediaIcon);
-        sbTitle = Ui.text(this, "", .036f, Ui.SOFT);
+        sbMedia.setBackground(Ui.round(Ui.PILL, px(.054f)));
+        sbMedia.setPadding(px(.03f), 0, px(.025f), 0);
+        LinearLayout sbArt = Ui.box(this, false);
+        sbArt.setGravity(Gravity.CENTER);
+        sbArt.setBackground(Ui.round(Ui.TEAL_BG, px(.033f)));
+        sbMediaIcon = Ui.icon(this, R.drawable.ic_radio, Ui.TEAL, .07f);
+        sbArt.addView(sbMediaIcon);
+        sbMedia.addView(sbArt, new LinearLayout.LayoutParams(px(.13f), px(.13f)));
+        LinearLayout sbText = Ui.box(this, true);
+        sbTitle = Ui.text(this, "", .044f, Ui.SOFT);
+        sbTitle.setTypeface(Ui.medium());
         sbTitle.setSingleLine(true);
         sbTitle.setEllipsize(TextUtils.TruncateAt.END);
-        sbTitle.setMaxWidth(px(.6f));
-        sbMedia.addView(sbTitle, Ui.left(this, .025f));
-        sbSub = Ui.text(this, "", .031f, Ui.DIM);
+        sbText.addView(sbTitle);
+        sbSub = Ui.text(this, "", .035f, Ui.DIM);
         sbSub.setSingleLine(true);
         sbSub.setEllipsize(TextUtils.TruncateAt.END);
-        sbSub.setMaxWidth(px(.35f));
-        sbMedia.addView(sbSub, Ui.left(this, .02f));
-        sbPrev = Ui.roundButton(this, R.drawable.ic_prev, Ui.DIM, 0, .092f, .046f);
-        sbPlay = Ui.roundButton(this, R.drawable.ic_pause, Ui.INK, 0xFF1C2128, .092f, .046f);
-        sbNext = Ui.roundButton(this, R.drawable.ic_next, Ui.DIM, 0, .092f, .046f);
-        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(px(.092f), px(.092f));
+        sbText.addView(sbSub, Ui.top(this, .01f));
+        LinearLayout.LayoutParams tl = Ui.lp(0, -2, 1f);
+        tl.leftMargin = px(.033f);
+        sbMedia.addView(sbText, tl);
+        sbPrev = Ui.roundButton(this, R.drawable.ic_prev, Ui.SOFT, 0, .125f, .06f);
+        sbPlay = Ui.roundButton(this, R.drawable.ic_pause, Ui.ON_AMBER, Ui.AMBER, .145f, .062f);
+        sbNext = Ui.roundButton(this, R.drawable.ic_next, Ui.SOFT, 0, .125f, .06f);
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(px(.125f), px(.125f));
         pl.leftMargin = px(.02f);
         sbMedia.addView(sbPrev, pl);
-        sbMedia.addView(sbPlay);
+        LinearLayout.LayoutParams ppl = new LinearLayout.LayoutParams(px(.145f), px(.145f));
+        ppl.leftMargin = ppl.rightMargin = px(.012f);
+        sbMedia.addView(sbPlay, ppl);
         sbMedia.addView(sbNext);
-        FrameLayout.LayoutParams mp = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        mp.bottomMargin = px(.054f);
+        FrameLayout.LayoutParams mp = new FrameLayout.LayoutParams(-1, px(.2f), Gravity.BOTTOM);
+        mp.leftMargin = mp.rightMargin = px(.0625f);
+        mp.bottomMargin = px(.046f);
         standby.addView(sbMedia, mp);
         sbMedia.setVisibility(View.GONE);
 
@@ -557,8 +567,8 @@ public class MainActivity extends Activity {
         int max = px(.035f);
         sbCenter.setTranslationX(r.nextInt(2 * max + 1) - max);
         sbCenter.setTranslationY(r.nextInt(2 * max + 1) - max);
-        int m = px(.02f);
-        sbMedia.setTranslationX(r.nextInt(2 * m + 1) - m);
+        int m = px(.012f);
+        sbMedia.setTranslationY(r.nextInt(2 * m + 1) - m);
     }
 
     /** Standby má vždy stejný vzhled (červený noční režim byl na přání vypnut). */
@@ -570,14 +580,14 @@ public class MainActivity extends Activity {
         sbAlarmTime.setTextColor(dark ? Ui.NIGHT : Ui.AMBER);
         sbAlarmLeft.setTextColor(dark ? Ui.NIGHT : Ui.AMBER_SOFT);
         Ui.tint(sbAlarmIcon, dark ? Ui.NIGHT : Ui.AMBER);
-        sbMedia.setBackground(Ui.round(dark ? 0xFF140707 : Ui.PILL, px(.5f)));
+        sbMedia.setBackground(Ui.round(dark ? 0xFF140707 : Ui.PILL, px(.054f)));
         sbTitle.setTextColor(dark ? Ui.NIGHT : Ui.SOFT);
         sbSub.setTextColor(dark ? Ui.NIGHT : Ui.DIM);
         Ui.tint(sbMediaIcon, dark ? Ui.NIGHT : Ui.TEAL);
-        Ui.tint((ImageView) sbPrev.getChildAt(0), dark ? Ui.NIGHT : Ui.DIM);
-        Ui.tint((ImageView) sbPlay.getChildAt(0), dark ? Ui.NIGHT : Ui.INK);
-        Ui.tint((ImageView) sbNext.getChildAt(0), dark ? Ui.NIGHT : Ui.DIM);
-        sbPlay.setBackground(Ui.circle(dark ? 0xFF200A08 : 0xFF1C2128));
+        Ui.tint((ImageView) sbPrev.getChildAt(0), dark ? Ui.NIGHT : Ui.SOFT);
+        Ui.tint((ImageView) sbPlay.getChildAt(0), dark ? Ui.NIGHT : Ui.ON_AMBER);
+        Ui.tint((ImageView) sbNext.getChildAt(0), dark ? Ui.NIGHT : Ui.SOFT);
+        sbPlay.setBackground(Ui.circle(dark ? 0xFF200A08 : Ui.AMBER));
         sbHint.setVisibility(dark && sbMedia.getVisibility() != View.VISIBLE ? View.VISIBLE : View.GONE);
         applyBrightness();
     }
@@ -948,6 +958,13 @@ public class MainActivity extends Activity {
         bPlay.setVisibility(vis);
         bNext.setVisibility(vis);
         sbMedia.setVisibility(vis);
+        // čas ve standby: když je dole přehrávání, posunout nad něj, jinak na střed
+        FrameLayout.LayoutParams cp = (FrameLayout.LayoutParams) sbCenter.getLayoutParams();
+        int bm = mc != null ? px(.25f) : 0;
+        if (cp.bottomMargin != bm) {
+            cp.bottomMargin = bm;
+            sbCenter.setLayoutParams(cp);
+        }
         if (standbyOn) styleStandby();
         if (mc == null) {
             mArtIcon.setImageResource(R.drawable.ic_radio);
