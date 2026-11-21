@@ -32,10 +32,12 @@ public class RadioService extends Service {
     private MediaSession session;
     private AudioManager audio;
     private boolean pausedByFocus;
-    private String name, url;
+    private String name, url, favicon;
+    private android.graphics.Bitmap logo;
 
-    static void play(Context c, String name, String url) {
-        c.startService(new Intent(c, RadioService.class).setAction(PLAY).putExtra("name", name).putExtra("url", url));
+    static void play(Context c, String name, String url, String favicon) {
+        c.startService(new Intent(c, RadioService.class).setAction(PLAY).putExtra("name", name).putExtra("url", url)
+                .putExtra("favicon", favicon));
     }
 
     static void stop(Context c) {
@@ -62,6 +64,7 @@ public class RadioService extends Service {
     @Override
     public int onStartCommand(Intent i, int flags, int startId) {
         if (i != null && PLAY.equals(i.getAction())) {
+            setFavicon(i.getStringExtra("favicon"));
             start(i.getStringExtra("name"), i.getStringExtra("url"));
         } else if (i != null && STOP.equals(i.getAction())) {
             stopAll();
@@ -95,10 +98,7 @@ public class RadioService extends Service {
         nowUrl = u;
         audio.requestAudioFocus(focus, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
         session.setActive(true);
-        session.setMetadata(new MediaMetadata.Builder()
-                .putString(MediaMetadata.METADATA_KEY_TITLE, n)
-                .putString(MediaMetadata.METADATA_KEY_ARTIST, "📻 rádio")
-                .build());
+        publishMetadata();
         state(PlaybackState.STATE_BUFFERING);
         foreground();
         try {
@@ -125,6 +125,49 @@ public class RadioService extends Service {
             Toast.makeText(this, "Stanice nejde přehrát", Toast.LENGTH_LONG).show();
             stopAll();
         }
+    }
+
+    private void publishMetadata() {
+        MediaMetadata.Builder b = new MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_TITLE, name)
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, "rádio");
+        if (logo != null) b.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, logo);
+        session.setMetadata(b.build());
+    }
+
+    /** Logo stanice (favicon z radio-browser.info) → obrázek v kartě hudby a ve standby. */
+    private void setFavicon(final String f) {
+        if (f != null && f.equals(favicon)) return;
+        favicon = f;
+        logo = null;
+        if (f == null || !f.startsWith("http")) return;
+        new Thread(new Runnable() {
+            public void run() {
+                android.graphics.Bitmap b = null;
+                try {
+                    java.net.HttpURLConnection con = (java.net.HttpURLConnection) new java.net.URL(f).openConnection();
+                    con.setConnectTimeout(8000);
+                    con.setReadTimeout(15000);
+                    con.setInstanceFollowRedirects(true);
+                    b = android.graphics.BitmapFactory.decodeStream(con.getInputStream());
+                    con.disconnect();
+                    if (b != null && Math.max(b.getWidth(), b.getHeight()) > 512) {
+                        float k = 512f / Math.max(b.getWidth(), b.getHeight());
+                        b = android.graphics.Bitmap.createScaledBitmap(b, Math.round(b.getWidth() * k), Math.round(b.getHeight() * k), true);
+                    }
+                } catch (Exception ignored) {
+                }
+                final android.graphics.Bitmap fb = b;
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(new Runnable() {
+                    public void run() {
+                        if (f.equals(favicon) && fb != null) {
+                            logo = fb;
+                            publishMetadata();
+                        }
+                    }
+                });
+            }
+        }).start();
     }
 
     private void resume() {
@@ -161,6 +204,7 @@ public class RadioService extends Service {
             }
             int next = ((idx < 0 ? 0 : idx + dir) % fav.length() + fav.length()) % fav.length();
             JSONObject s = fav.getJSONObject(next);
+            setFavicon(s.optString("favicon", null));
             start(s.getString("name"), s.getString("url"));
         } catch (Exception ignored) {
         }

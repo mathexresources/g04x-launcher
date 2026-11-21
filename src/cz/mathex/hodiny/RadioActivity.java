@@ -157,7 +157,7 @@ public class RadioActivity extends Activity {
         return false;
     }
 
-    private void toggleFav(String name, String url) {
+    private void toggleFav(String name, String url, String favicon) {
         JSONArray f = favorites(), out = new JSONArray();
         boolean removed = false;
         for (int i = 0; i < f.length(); i++) {
@@ -167,7 +167,7 @@ public class RadioActivity extends Activity {
         }
         if (!removed) {
             try {
-                out.put(new JSONObject().put("name", name).put("url", url));
+                out.put(new JSONObject().put("name", name).put("url", url).put("favicon", favicon));
             } catch (Exception ignored) {
             }
         }
@@ -221,7 +221,7 @@ public class RadioActivity extends Activity {
                     list.addView(row, rl);
                 }
                 JSONObject o = fav.optJSONObject(i);
-                favCard(row, o.optString("name"), o.optString("url"));
+                favCard(row, o.optString("name"), o.optString("url"), favIcon(o));
             }
             for (int i = fav.length() % 3; i != 0 && i < 3; i++) { // dorovnat poslední řádek
                 View spacer = new View(this);
@@ -241,7 +241,7 @@ public class RadioActivity extends Activity {
             String sub = o.optString("codec", "") + (o.optInt("bitrate", 0) > 0 ? " " + o.optInt("bitrate") + " kb/s" : "");
             String tags = o.optString("tags", "");
             if (tags.length() > 0) sub += "  ·  " + tags.replace(",", ", ");
-            row(o.optString("name").trim(), url, sub);
+            row(o.optString("name").trim(), url, sub, o.optString("favicon", ""));
         }
     }
 
@@ -252,7 +252,18 @@ public class RadioActivity extends Activity {
         list.addView(t);
     }
 
-    private void favCard(LinearLayout row, final String name, final String url) {
+    /** Favicon oblíbené stanice; starší oblíbené ho nemají → zkusit najít ve výsledcích. */
+    private String favIcon(JSONObject fav) {
+        String f = fav.optString("favicon", "");
+        if (f.length() > 0) return f;
+        for (int i = 0; i < results.length(); i++) {
+            JSONObject o = results.optJSONObject(i);
+            if (fav.optString("url").equals(o.optString("url_resolved", o.optString("url")))) return o.optString("favicon", "");
+        }
+        return "";
+    }
+
+    private void favCard(LinearLayout row, final String name, final String url, final String favicon) {
         boolean playing = url.equals(RadioService.nowUrl);
         LinearLayout c = Ui.box(this, true);
         c.setBackground(Ui.tile(this, playing ? Ui.AMBER : Ui.TILE, .046f));
@@ -268,13 +279,13 @@ public class RadioActivity extends Activity {
         c.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 if (url.equals(RadioService.nowUrl)) RadioService.stop(RadioActivity.this);
-                else RadioService.play(RadioActivity.this, name, url);
+                else RadioService.play(RadioActivity.this, name, url, favicon);
                 later();
             }
         });
         c.setOnLongClickListener(new View.OnLongClickListener() {
             public boolean onLongClick(View v) {
-                toggleFav(name, url);
+                toggleFav(name, url, favicon);
                 return true;
             }
         });
@@ -283,7 +294,7 @@ public class RadioActivity extends Activity {
         row.addView(c, p);
     }
 
-    private void row(final String name, final String url, String sub) {
+    private void row(final String name, final String url, String sub, final String favicon) {
         boolean playing = url.equals(RadioService.nowUrl);
         LinearLayout r = Ui.box(this, false);
         r.setGravity(Gravity.CENTER_VERTICAL);
@@ -291,7 +302,7 @@ public class RadioActivity extends Activity {
         r.setPadding(px(.042f), px(.03f), px(.015f), px(.03f));
         r.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                RadioService.play(RadioActivity.this, name, url);
+                RadioService.play(RadioActivity.this, name, url, favicon);
                 later();
             }
         });
@@ -317,7 +328,7 @@ public class RadioActivity extends Activity {
         star.addView(Ui.icon(this, fav ? R.drawable.ic_star_fill : R.drawable.ic_star, fav ? Ui.AMBER : Ui.DIM, .065f));
         star.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                toggleFav(name, url);
+                toggleFav(name, url, favicon);
             }
         });
         r.addView(star, new LinearLayout.LayoutParams(px(.14f), px(.14f)));
