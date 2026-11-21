@@ -165,6 +165,9 @@ public class RingActivity extends Activity {
         done = true;
         Alarms.clearSnooze(this);
         Alarms.schedule(this);
+        if (Prefs.printMorning(this)) {
+            android.widget.Toast.makeText(this, "🖨  Tisknu ranní zprávu", android.widget.Toast.LENGTH_SHORT).show();
+        }
         finishRing();
     }
 

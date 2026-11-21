@@ -39,6 +39,62 @@ final class Prefs {
         return get(c).getString("printer", DEFAULT_PRINTER);
     }
 
+    static String apiToken(Context c) {
+        return get(c).getString("api_token", "");
+    }
+
+    static boolean morningOnAlarm(Context c) {
+        return get(c).getBoolean("morning_on_alarm", true);
+    }
+
+    /** http://host:port z adresy tiskárny (např. …/clock → http://192.168.0.101:8630). */
+    static String printerBase(Context c) {
+        try {
+            URL u = new URL(printerUrl(c));
+            return u.getProtocol() + "://" + u.getHost() + (u.getPort() > 0 ? ":" + u.getPort() : "");
+        } catch (Exception e) {
+            return "http://192.168.0.101:8630";
+        }
+    }
+
+    /**
+     * Po vypnutí budíku vytiskne ranní zprávu přes API thermoprint-serveru (nejvýš jednou denně).
+     * Vrací false, když je funkce vypnutá nebo chybí token.
+     */
+    static boolean printMorning(final Context c) {
+        final String token = apiToken(c);
+        if (!morningOnAlarm(c) || token.length() == 0) return false;
+        final String today = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date());
+        if (today.equals(get(c).getString("morning_printed", ""))) return false;
+        get(c).edit().putString("morning_printed", today).apply();
+        final String url = printerBase(c) + "/api/print/morning";
+        new Thread(new Runnable() {
+            public void run() {
+                for (int attempt = 0; attempt < 5; attempt++) { // Wi-Fi se po ránu může chvíli probouzet
+                    try {
+                        HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
+                        con.setRequestMethod("POST");
+                        con.setConnectTimeout(8000);
+                        con.setReadTimeout(30000);
+                        con.setRequestProperty("Authorization", "Bearer " + token);
+                        con.setDoOutput(true);
+                        con.getOutputStream().close();
+                        int code = con.getResponseCode();
+                        con.disconnect();
+                        if (code < 500 && code != 0) return; // 200 = tiskne se, 401 = špatný token (opakovat nemá smysl)
+                    } catch (Exception ignored) {
+                    }
+                    try {
+                        Thread.sleep(10000);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                }
+            }
+        }).start();
+        return true;
+    }
+
     static String http(String url) throws Exception {
         HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
         con.setConnectTimeout(10000);
@@ -76,16 +132,33 @@ final class Prefs {
         url.setText(printerUrl(a));
         box.addView(url);
 
+        box.addView(label(a, "API token tiskárny (thermoprint → Nastavení → API)"));
+        final EditText token = new EditText(a);
+        token.setSingleLine(true);
+        token.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        token.setText(apiToken(a));
+        box.addView(token);
+
+        final android.widget.CheckBox morning = new android.widget.CheckBox(a);
+        morning.setText("Po vypnutí budíku vytisknout ranní zprávu");
+        morning.setChecked(morningOnAlarm(a));
+        box.addView(morning);
+
+        android.widget.ScrollView sv = new android.widget.ScrollView(a);
+        sv.addView(box);
+
         new AlertDialog.Builder(a, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle("Nastavení hodin")
-                .setView(box)
+                .setView(sv)
                 .setNegativeButton("Zrušit", null)
                 .setPositiveButton("Uložit", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int w) {
                         String u = url.getText().toString().trim();
                         if (u.length() == 0) u = DEFAULT_PRINTER;
                         if (!u.startsWith("http")) u = "http://" + u;
-                        get(a).edit().putString("printer", u).apply();
+                        get(a).edit().putString("printer", u)
+                                .putString("api_token", token.getText().toString().trim())
+                                .putBoolean("morning_on_alarm", morning.isChecked()).apply();
                         String c = city.getText().toString().trim();
                         if (c.length() > 0 && !c.equals(weatherName(a))) {
                             get(a).edit().putString("w_name", c).putString("w_query", c)
