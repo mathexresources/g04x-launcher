@@ -434,12 +434,12 @@ public class MainActivity extends Activity {
                         weatherLoading = false;
                         long now = System.currentTimeMillis();
                         if (result != null) {
-                            Prefs.get(MainActivity.this).edit().putString("weather", result).putLong("weather_ts", now).apply();
+                            Prefs.get(MainActivity.this).edit().putString("weather_wttr", result).putLong("weather_ts", now).apply();
                             showWeather(result);
                         } else {
                             // zkusit znovu za 2 minuty
                             Prefs.get(MainActivity.this).edit().putLong("weather_ts", now - WEATHER_EVERY + 120000).apply();
-                            String cached = Prefs.get(MainActivity.this).getString("weather", null);
+                            String cached = Prefs.get(MainActivity.this).getString("weather_wttr", null);
                             if (cached == null) wDesc.setText("počasí nedostupné");
                             else showWeather(cached);
                         }
@@ -450,8 +450,10 @@ public class MainActivity extends Activity {
     }
 
     private void showCachedWeather() {
-        String js = Prefs.get(this).getString("weather", null);
+        Prefs.get(this).edit().remove("weather").apply(); // stará data z Open-Meteo (verze 1.0)
+        String js = Prefs.get(this).getString("weather_wttr", null);
         if (js != null) showWeather(js);
+        else Prefs.get(this).edit().putLong("weather_ts", 0).apply();
     }
 
     private static String val(JSONObject o, String key) {
@@ -510,7 +512,8 @@ public class MainActivity extends Activity {
             }
             wHours.setText(sb.toString());
         } catch (Exception e) {
-            wDesc.setText("počasí: chyba dat");
+            wDesc.setText("počasí: chyba dat, ťukni pro obnovení");
+            Prefs.get(this).edit().remove("weather_wttr").putLong("weather_ts", 0).apply();
         }
     }
 

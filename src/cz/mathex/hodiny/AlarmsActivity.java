@@ -116,6 +116,18 @@ public class AlarmsActivity extends Activity {
         return c.get(java.util.Calendar.HOUR_OF_DAY) + ":" + (m < 10 ? "0" : "") + m;
     }
 
+    private static String whenText(long t) {
+        if (t < 0) return "–";
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        c.setTimeInMillis(t);
+        java.util.Calendar today = java.util.Calendar.getInstance();
+        int diff = c.get(java.util.Calendar.DAY_OF_YEAR) - today.get(java.util.Calendar.DAY_OF_YEAR);
+        if (c.get(java.util.Calendar.YEAR) != today.get(java.util.Calendar.YEAR)) diff = 1;
+        String day = diff == 0 ? "dnes" : diff == 1 ? "zítra"
+                : new java.text.SimpleDateFormat("EEEE", new java.util.Locale("cs", "CZ")).format(c.getTime());
+        return day + " v " + fmt(t);
+    }
+
     private void toastNext(Alarms.Alarm a) {
         long t = Alarms.nextTrigger(a, System.currentTimeMillis());
         if (t < 0) return;
@@ -135,9 +147,9 @@ public class AlarmsActivity extends Activity {
         pick.setGravity(Gravity.CENTER);
         final NumberPicker hp = picker(23);
         final NumberPicker mp = picker(59);
-        java.util.Calendar now = java.util.Calendar.getInstance();
-        hp.setValue(existing != null ? existing.hour : 7);
-        mp.setValue(existing != null ? existing.minute : 0);
+        android.content.SharedPreferences last = Prefs.get(this);
+        hp.setValue(existing != null ? existing.hour : last.getInt("last_h", 7));
+        mp.setValue(existing != null ? existing.minute : last.getInt("last_m", 0));
         pick.addView(hp);
         TextView colon = Ui.text(this, ":", .09f, Ui.INK);
         colon.setPadding(pad / 2, 0, pad / 2, 0);
@@ -145,10 +157,26 @@ public class AlarmsActivity extends Activity {
         pick.addView(mp);
         box.addView(pick);
 
-        final int[] days = {existing != null ? existing.days : 0x1F};
-        LinearLayout dayRow = Ui.box(this, false);
+        final int[] days = {existing != null ? existing.days : 0};
+
+        // kdy zazvoní – aktualizuje se při otáčení koleček
+        final TextView when = Ui.text(this, "", .045f, Ui.ACCENT);
+        box.addView(when, Ui.top(this, .02f));
+
+        final LinearLayout dayRow = Ui.box(this, false);
         dayRow.setGravity(Gravity.CENTER);
         final TextView[] dayViews = new TextView[7];
+        final Runnable refresh = new Runnable() {
+            public void run() {
+                Alarms.Alarm tmp = new Alarms.Alarm();
+                tmp.hour = hp.getValue();
+                tmp.minute = mp.getValue();
+                tmp.days = days[0];
+                when.setText("zazvoní " + whenText(Alarms.nextTrigger(tmp, System.currentTimeMillis()))
+                        + (days[0] == 0 ? " (jednou)" : " · " + tmp.daysText()));
+                styleDays(dayViews, days[0]);
+            }
+        };
         for (int i = 0; i < 7; i++) {
             final int bit = 1 << i;
             final TextView d = Ui.text(this, Alarms.DAY_NAMES[i], .045f, Ui.INK);
@@ -156,7 +184,7 @@ public class AlarmsActivity extends Activity {
             d.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
                     days[0] ^= bit;
-                    styleDays(dayViews, days[0]);
+                    refresh.run();
                 }
             });
             dayViews[i] = d;
@@ -164,12 +192,31 @@ public class AlarmsActivity extends Activity {
             lp.leftMargin = lp.rightMargin = Ui.px(this, .008f);
             dayRow.addView(d, lp);
         }
-        styleDays(dayViews, days[0]);
+        NumberPicker.OnValueChangeListener ch = new NumberPicker.OnValueChangeListener() {
+            public void onValueChange(NumberPicker p, int o, int n) {
+                refresh.run();
+            }
+        };
+        hp.setOnValueChangedListener(ch);
+        mp.setOnValueChangedListener(ch);
+
+        // opakování je schované – výchozí je jednorázový budík na nejbližší čas
+        final TextView repeat = Ui.text(this, "↻  Opakovat ve dny…", .045f, Ui.DIM);
+        repeat.setPadding(pad, pad / 2, pad, pad / 2);
+        repeat.setBackground(Ui.press(this));
+        box.addView(repeat, Ui.top(this, .015f));
         LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-2, -2);
-        dl.topMargin = pad / 2;
+        dl.topMargin = pad / 3;
         box.addView(dayRow, dl);
-        TextView hint = Ui.text(this, "bez vybraných dnů = zazvoní jednou", .032f, Ui.DIM);
-        box.addView(hint, Ui.top(this, .015f));
+        dayRow.setVisibility(days[0] != 0 ? View.VISIBLE : View.GONE);
+        repeat.setVisibility(days[0] != 0 ? View.GONE : View.VISIBLE);
+        repeat.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                repeat.setVisibility(View.GONE);
+                dayRow.setVisibility(View.VISIBLE);
+            }
+        });
+        refresh.run();
 
         ScrollView sv = new ScrollView(this);
         sv.addView(box);
@@ -190,6 +237,7 @@ public class AlarmsActivity extends Activity {
                         a.minute = mp.getValue();
                         a.days = days[0];
                         a.on = true;
+                        Prefs.get(AlarmsActivity.this).edit().putInt("last_h", a.hour).putInt("last_m", a.minute).apply();
                         Alarms.save(AlarmsActivity.this, all);
                         toastNext(a);
                         render();

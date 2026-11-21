@@ -89,7 +89,7 @@ final class Prefs {
                         String c = city.getText().toString().trim();
                         if (c.length() > 0 && !c.equals(weatherName(a))) {
                             get(a).edit().putString("w_name", c).putString("w_query", c)
-                                    .putLong("weather_ts", 0).remove("weather").apply();
+                                    .putLong("weather_ts", 0).remove("weather_wttr").apply();
                         }
                         if (done != null) done.run();
                     }
