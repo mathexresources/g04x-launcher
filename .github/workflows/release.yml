@@ -1,0 +1,47 @@
+name: release
+
+# Push tagu v<verze> (stejné jako versionName v AndroidManifest.xml) → podepsané APK v GitHub Releases.
+# Hodiny si ho stáhnou přes ⚙ Nastavení → ⟳ Aktualizovat.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kontrola verze
+        run: |
+          VER=$(grep -o 'versionName="[^"]*"' AndroidManifest.xml | cut -d'"' -f2)
+          if [ "v$VER" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME nesedí s versionName $VER v AndroidManifest.xml"; exit 1
+          fi
+
+      - name: Android nástroje
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq android-sdk-platform-23 aapt dalvik-exchange apksigner zipalign
+
+      - name: Podpisový klíč
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "Chybí secret KEYSTORE_B64"; exit 1; fi
+          echo "$KEYSTORE_B64" | base64 -d > hodiny.keystore
+
+      - name: Sestavení
+        run: ./build.sh
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=${GITHUB_REF_NAME#v}
+          cp Hodiny.apk "Hodiny-$VER.apk"
+          gh release create "$GITHUB_REF_NAME" "Hodiny-$VER.apk" --title "Hodiny $VER" \
+            --notes "$(git log -1 --pretty=%B "$GITHUB_REF_NAME" | grep -v -e '^Co-Authored-By' -e '^Claude-Session')"
