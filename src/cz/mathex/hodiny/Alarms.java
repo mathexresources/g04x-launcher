@@ -25,6 +25,7 @@ final class Alarms {
     static final class Alarm {
         int id, hour, minute, days; // days: bit 0 = pondělí … bit 6 = neděle, 0 = jednorázový
         boolean on = true;
+        boolean print; // po vypnutí vytisknout ranní zprávu
 
         String daysText() {
             if (days == 0) return "jednou";
@@ -64,6 +65,7 @@ final class Alarms {
                 a.minute = o.getInt("m");
                 a.days = o.optInt("d", 0);
                 a.on = o.optBoolean("on", true);
+                a.print = o.optBoolean("p", false);
                 out.add(a);
             }
         } catch (Exception ignored) {
@@ -80,7 +82,7 @@ final class Alarms {
         JSONArray arr = new JSONArray();
         try {
             for (Alarm a : list) {
-                arr.put(new JSONObject().put("id", a.id).put("h", a.hour).put("m", a.minute).put("d", a.days).put("on", a.on));
+                arr.put(new JSONObject().put("id", a.id).put("h", a.hour).put("m", a.minute).put("d", a.days).put("on", a.on).put("p", a.print));
             }
         } catch (Exception ignored) {
         }
@@ -122,8 +124,14 @@ final class Alarms {
         return sp(c).getLong("snooze", 0);
     }
 
-    static void snooze(Context c) {
-        sp(c).edit().putLong("snooze", System.currentTimeMillis() + SNOOZE_MIN * 60000L).apply();
+    /** Id budíku, který je právě odložený (aby se po odložení vědělo, jestli tisknout). */
+    static int snoozeOf(Context c) {
+        return sp(c).getInt("snooze_of", 0);
+    }
+
+    static void snooze(Context c, int alarmId) {
+        sp(c).edit().putLong("snooze", System.currentTimeMillis() + SNOOZE_MIN * 60000L)
+                .putInt("snooze_of", alarmId).apply();
         schedule(c);
     }
 

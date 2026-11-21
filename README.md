@@ -43,8 +43,8 @@ in the order we actually did it, including the mistakes.
 - **Music card** for whatever is playing (Spotify, SoundCloud, …) via Android MediaSession.
 - **Printer tile** opens the `/clock` page of [thermoprint-server](https://github.com/mathexresources/thermoprint-server)
   in a built-in WebView.
-- **Morning report on alarm dismiss** – tapping *Vypnout* (stop) calls the thermoprint API and prints the morning
-  receipt, instead of printing it at a fixed time.
+- **Morning report on alarm dismiss** – each alarm has a *🖨 print morning report* checkbox; tapping *Vypnout* (stop)
+  on such an alarm calls the thermoprint API and prints the morning receipt, instead of printing it at a fixed time.
 - **Remote self-update** from GitHub Releases (⚙ Settings → ⟳ Aktualizovat).
 - Keeps the screen on, hides system bars, ignores Back.
 
@@ -310,7 +310,7 @@ adb shell input keyevent KEYCODE_HOME
 | ⋯ tile | all apps (⚙ settings in the top bar) | app info |
 
 **Settings** (long-press weather): weather location (village name or `lat,lon`), printer URL, thermoprint API token,
-"print morning report after stopping the alarm", **⟳ Aktualizovat** (update). Tip for typing the token:
+"🖨 test morning print", **⟳ Aktualizovat** (update). Tip for typing the token:
 tap the field and run `adb shell input text "TOKEN"`.
 
 **Alarms:** *+ Nový* → pick time on the wheels → by default it rings once at the next occurrence of that time
@@ -359,8 +359,9 @@ shopping list, site status, Moodle, planes, xkcd, test) and printer/site status.
 lasts 60 days.
 
 Morning report on alarm dismiss: in thermoprint settings untick *"Tisknout každé ráno"* and generate an **API token**,
-put it into the launcher settings. On *Vypnout* the launcher calls `POST /api/print/morning` (Bearer token) –
-at most once a day, retried 5× every 10 s in case Wi-Fi is still waking up. Snooze doesn't print.
+put it into the launcher settings and tick *🖨 Po vypnutí vytisknout ranní zprávu* on the alarm. On *Vypnout* the
+launcher calls `POST /api/print/morning` (Bearer token), retried 5× every 10 s in case Wi-Fi is still waking up,
+and shows the result as a toast. Snooze doesn't print (the snoozed alarm remembers the setting).
 
 ---
 

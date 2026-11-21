@@ -84,7 +84,8 @@ public class AlarmsActivity extends Activity {
             TextView time = Ui.text(this, a.timeText(), .13f, a.on ? Ui.INK : Ui.DIM);
             time.setTypeface(Ui.light());
             txt.addView(time);
-            txt.addView(Ui.text(this, a.daysText(), .045f, Ui.DIM), Ui.top(this, .01f));
+            txt.addView(Ui.text(this, a.daysText() + (a.print ? "   ·   🖨 ranní tisk" : ""), .045f, Ui.DIM),
+                    Ui.top(this, .01f));
             row.addView(txt, Ui.lp(0, -2, 1f));
 
             TextView sw = Ui.text(this, a.on ? "ZAP" : "VYP", .05f, a.on ? Ui.BG : Ui.DIM);
@@ -218,6 +219,13 @@ public class AlarmsActivity extends Activity {
         });
         refresh.run();
 
+        final android.widget.CheckBox print = new android.widget.CheckBox(this);
+        print.setText("🖨  Po vypnutí vytisknout ranní zprávu");
+        print.setTextColor(Ui.INK);
+        print.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, Ui.base(this) * .045f);
+        print.setChecked(existing != null ? existing.print : Prefs.get(this).getBoolean("last_print", true));
+        box.addView(print, Ui.top(this, .02f));
+
         ScrollView sv = new ScrollView(this);
         sv.addView(box);
 
@@ -237,7 +245,9 @@ public class AlarmsActivity extends Activity {
                         a.minute = mp.getValue();
                         a.days = days[0];
                         a.on = true;
-                        Prefs.get(AlarmsActivity.this).edit().putInt("last_h", a.hour).putInt("last_m", a.minute).apply();
+                        a.print = print.isChecked();
+                        Prefs.get(AlarmsActivity.this).edit().putInt("last_h", a.hour).putInt("last_m", a.minute)
+                                .putBoolean("last_print", a.print).apply();
                         Alarms.save(AlarmsActivity.this, all);
                         toastNext(a);
                         render();

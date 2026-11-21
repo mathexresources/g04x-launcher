@@ -167,11 +167,6 @@ final class Prefs {
         token.setText(apiToken(a));
         box.addView(token);
 
-        final android.widget.CheckBox morning = new android.widget.CheckBox(a);
-        morning.setText("Po vypnutí budíku vytisknout ranní zprávu");
-        morning.setChecked(morningOnAlarm(a));
-        box.addView(morning);
-
         TextView test = new TextView(a);
         test.setText("🖨  Vyzkoušet ranní tisk (s tokenem výše)");
         test.setTextColor(Ui.ACCENT);
@@ -204,8 +199,7 @@ final class Prefs {
                         if (u.length() == 0) u = DEFAULT_PRINTER;
                         if (!u.startsWith("http")) u = "http://" + u;
                         get(a).edit().putString("printer", u)
-                                .putString("api_token", token.getText().toString().trim())
-                                .putBoolean("morning_on_alarm", morning.isChecked()).apply();
+                                .putString("api_token", token.getText().toString().trim()).apply();
                         String c = city.getText().toString().trim();
                         if (c.length() > 0 && !c.equals(weatherName(a))) {
                             get(a).edit().putString("w_name", c).putString("w_query", c)

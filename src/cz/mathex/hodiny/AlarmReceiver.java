@@ -16,6 +16,7 @@ public class AlarmReceiver extends BroadcastReceiver {
         }
         int id = i.getIntExtra("id", 0);
         if (id == Alarms.SNOOZE_ID) {
+            id = Alarms.snoozeOf(c);
             Alarms.clearSnooze(c);
         } else {
             List<Alarms.Alarm> list = Alarms.load(c);
@@ -24,7 +25,7 @@ public class AlarmReceiver extends BroadcastReceiver {
             Alarms.save(c, list); // zároveň naplánuje další
         }
         Alarms.schedule(c);
-        c.startActivity(new Intent(c, RingActivity.class)
+        c.startActivity(new Intent(c, RingActivity.class).putExtra("alarm_id", id)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NO_USER_ACTION));
     }
 }

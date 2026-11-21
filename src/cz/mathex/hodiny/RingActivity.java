@@ -27,6 +27,7 @@ public class RingActivity extends Activity {
     private MediaPlayer player;
     private AudioManager audio;
     private boolean done;
+    private int alarmId;
 
     private final AudioManager.OnAudioFocusChangeListener focus = new AudioManager.OnAudioFocusChangeListener() {
         public void onAudioFocusChange(int change) {
@@ -36,6 +37,7 @@ public class RingActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        alarmId = getIntent().getIntExtra("alarm_id", 0);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                 | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
                 | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
@@ -55,7 +57,9 @@ public class RingActivity extends Activity {
                 + (c.get(Calendar.MINUTE) < 10 ? "0" : "") + c.get(Calendar.MINUTE), .34f, Ui.INK);
         time.setTypeface(Ui.light());
         root.addView(time);
-        TextView label = Ui.text(this, "⏰  Budík", .06f, Ui.ACCENT);
+        Alarms.Alarm me = Alarms.find(Alarms.load(this), alarmId);
+        TextView label = Ui.text(this, "⏰  Budík" + (me != null && me.print ? "   ·   🖨 po vypnutí ranní zpráva" : ""),
+                .055f, Ui.ACCENT);
         root.addView(label, Ui.top(this, .02f));
 
         LinearLayout buttons = Ui.box(this, false);
@@ -156,7 +160,7 @@ public class RingActivity extends Activity {
     private void snooze() {
         if (done) return;
         done = true;
-        Alarms.snooze(this);
+        Alarms.snooze(this, alarmId);
         finishRing();
     }
 
@@ -165,7 +169,8 @@ public class RingActivity extends Activity {
         done = true;
         Alarms.clearSnooze(this);
         Alarms.schedule(this);
-        Prefs.printMorning(this, false); // výsledek ukáže toast
+        Alarms.Alarm a = Alarms.find(Alarms.load(this), alarmId);
+        if (a != null && a.print) Prefs.printMorning(this, true); // výsledek ukáže toast
         finishRing();
     }
 
