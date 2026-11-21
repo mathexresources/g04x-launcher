@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="cz.mathex.hodiny"
-    android:versionCode="5"
-    android:versionName="1.4">
+    android:versionCode="6"
+    android:versionName="1.5">
 
     <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="23" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -10,6 +10,8 @@
     <!-- povolit přes `adb shell appops set cz.mathex.hodiny SYSTEM_ALERT_WINDOW allow`,
          aby budík mohl vyskočit i nad jinou aplikací (např. Spotify) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- aktualizace z GitHub Releases; povolit: `adb shell appops set cz.mathex.hodiny REQUEST_INSTALL_PACKAGES allow` -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:label="Hodiny"
@@ -68,6 +70,8 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <receiver android:name=".UpdateReceiver" android:exported="false" />
 
         <service
             android:name=".MediaListener"

@@ -18,12 +18,22 @@ sudo apt install android-sdk-platform-23 aapt dalvik-exchange apksigner zipalign
 Kód je čistá Java 8 bez lambd (kvůli `dx`) proti `android-23`.
 Při prvním sestavení se vytvoří `hodiny.keystore` – **schovej si ho**, jinak nepůjde aktualizovat přes `adb install -r` (v gitu není).
 
+## Vydání nové verze (vzdálená aktualizace)
+
+1. Zvyš `versionCode` a `versionName` v `AndroidManifest.xml`.
+2. `./release.sh "co je nového"` – sestaví APK a vytvoří GitHub Release `v<verze>` s přiloženým APK.
+3. Na hodinách: podrž počasí (nebo ⋯ → ⚙ Nastavení) → **⟳ Aktualizovat** → potvrdit instalaci.
+
+APK musí být podepsané stejným `hodiny.keystore`, jinak ho Android odmítne nainstalovat přes starou verzi.
+
 ## Instalace na hodiny
 
 ```bash
 adb install -r Hodiny.apk
 adb shell cmd package set-home-activity cz.mathex.hodiny/.MainActivity
 adb shell cmd notification allow_listener cz.mathex.hodiny/cz.mathex.hodiny.MediaListener
+adb shell appops set cz.mathex.hodiny SYSTEM_ALERT_WINDOW allow        # budík vyskočí i nad jinou aplikací
+adb shell appops set cz.mathex.hodiny REQUEST_INSTALL_PACKAGES allow   # aktualizace z GitHubu
 ```
 
 Ladění: `adb logcat -d | grep -i hodiny | tail -50`

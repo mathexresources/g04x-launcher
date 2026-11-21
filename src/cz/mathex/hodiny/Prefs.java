@@ -148,7 +148,12 @@ final class Prefs {
         sv.addView(box);
 
         new AlertDialog.Builder(a, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Nastavení hodin")
+                .setTitle("Nastavení hodin · " + Updater.currentVersion(a))
+                .setNeutralButton("⟳ Aktualizovat", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int w) {
+                        Updater.check(a);
+                    }
+                })
                 .setView(sv)
                 .setNegativeButton("Zrušit", null)
                 .setPositiveButton("Uložit", new DialogInterface.OnClickListener() {
