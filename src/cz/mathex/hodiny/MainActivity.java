@@ -49,6 +49,15 @@ public class MainActivity extends Activity {
     private TextView clock, date, alarm, wIcon, wTemp, wDesc, wRange, wHours;
     private TextView mTitle, mArtist, bPrev, bPlay, bNext;
     private FrameLayout standby;
+    private LinearLayout sbCenter;
+    private TextView todayLine;
+
+    // senzory: automatický jas a mávnutí rukou
+    private android.hardware.SensorManager sensors;
+    private android.hardware.Sensor lightSensor, proxSensor;
+    private float lux = -1, bright = -1;
+    private boolean darkRoom;
+    private long proxNearAt;
     private LinearLayout sbMedia;
     private TextView sbClock, sbAlarm, sbTitle, sbPrev, sbPlay, sbNext;
     private boolean standbyOn;
@@ -93,6 +102,12 @@ public class MainActivity extends Activity {
         date = Ui.text(this, "", .058f, Ui.INK);
         left.addView(date, Ui.top(this, .012f));
 
+        todayLine = Ui.text(this, "", .04f, Ui.DIM);
+        todayLine.setSingleLine(true);
+        todayLine.setEllipsize(TextUtils.TruncateAt.END);
+        todayLine.setVisibility(View.GONE);
+        left.addView(todayLine, Ui.top(this, .012f));
+
         alarm = Ui.text(this, "", .046f, Ui.ACCENT);
         alarm.setSingleLine(true);
         alarm.setEllipsize(TextUtils.TruncateAt.END);
@@ -101,7 +116,7 @@ public class MainActivity extends Activity {
                 showAlarms();
             }
         });
-        left.addView(alarm, Ui.top(this, .02f));
+        left.addView(alarm, Ui.top(this, .016f));
 
         LinearLayout right = Ui.box(this, true);
         right.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
@@ -185,6 +200,11 @@ public class MainActivity extends Activity {
                 Ui.launch(MainActivity.this, SPOTIFY, "Spotify");
             }
         });
+        addTile(tiles, "📻", new Runnable() {
+            public void run() {
+                startActivity(new Intent(MainActivity.this, RadioActivity.class));
+            }
+        });
         addTile(tiles, "🖨", new Runnable() {
             public void run() {
                 startActivity(new Intent(MainActivity.this, PrinterActivity.class));
@@ -199,7 +219,7 @@ public class MainActivity extends Activity {
         // standby přes celou obrazovku: čas, budík, dole ovládání hudby
         standby = new FrameLayout(this);
         standby.setBackgroundColor(0xFF000000);
-        LinearLayout sbCenter = Ui.box(this, true);
+        sbCenter = Ui.box(this, true);
         sbCenter.setGravity(Gravity.CENTER);
         sbClock = Ui.text(this, "", .40f, Ui.INK);
         sbClock.setTypeface(Ui.light());
@@ -308,6 +328,8 @@ public class MainActivity extends Activity {
         bindMedia();
         updateAlarm();
         h.post(tick);
+        startSensors();
+        loadToday(false);
     }
 
     @Override
@@ -337,6 +359,7 @@ public class MainActivity extends Activity {
         }
         msm.removeOnActiveSessionsChangedListener(sessions);
         setController(null);
+        if (sensors != null) sensors.unregisterListener(sensorListener);
     }
 
     @Override
@@ -388,7 +411,11 @@ public class MainActivity extends Activity {
                 sbClock.setText(t);
                 date.setText(dateFmt.format(c.getTime()));
                 updateAlarm(); // odpočet do budíku
-                if (standbyOn) styleStandby();
+                if (standbyOn) {
+                    styleStandby();
+                    shiftStandby();
+                }
+                if (c.get(Calendar.HOUR_OF_DAY) == 0 && c.get(Calendar.MINUTE) == 1) loadToday(true);
             }
             if (now - Prefs.get(MainActivity.this).getLong("weather_ts", 0) > WEATHER_EVERY) loadWeather();
             if (!standbyOn && hasWindowFocus() && now - lastTouch > STANDBY_IDLE) setStandby(true);
@@ -409,18 +436,82 @@ public class MainActivity extends Activity {
         standbyOn = on;
         standby.setVisibility(on ? View.VISIBLE : View.GONE);
         if (on) {
+            shiftStandby();
             styleStandby();
         } else {
-            WindowManager.LayoutParams lp = getWindow().getAttributes();
-            lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
-            getWindow().setAttributes(lp);
             lastTouch = System.currentTimeMillis();
+            applyBrightness();
         }
     }
 
+    /** Tma: podle senzoru světla (když je), jinak podle hodin 22–7. */
+    private boolean isDark() {
+        return lightSensor != null && lux >= 0 ? darkRoom : isNightHours(Calendar.getInstance());
+    }
+
+    /** Ochrana displeje: obsah standby se každou minutu posune o pár pixelů. */
+    private void shiftStandby() {
+        java.util.Random r = new java.util.Random();
+        int max = px(.035f);
+        sbCenter.setTranslationX(r.nextInt(2 * max + 1) - max);
+        sbCenter.setTranslationY(r.nextInt(2 * max + 1) - max);
+        sbMedia.setTranslationX(r.nextInt(px(.02f) * 2 + 1) - px(.02f));
+    }
+
+    /** Jas z luxů (logaritmicky), plynule; ve tmavém standby skoro zhasnuto. */
+    private void applyBrightness() {
+        WindowManager.LayoutParams lp = getWindow().getAttributes();
+        if (standbyOn && isDark()) {
+            lp.screenBrightness = 0.01f;
+        } else if (lightSensor == null || bright < 0) {
+            lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+        } else {
+            lp.screenBrightness = Math.max(0.02f, standbyOn ? bright * 0.7f : bright);
+        }
+        getWindow().setAttributes(lp);
+    }
+
+    private void startSensors() {
+        if (sensors == null) {
+            sensors = (android.hardware.SensorManager) getSystemService(Context.SENSOR_SERVICE);
+            lightSensor = sensors.getDefaultSensor(android.hardware.Sensor.TYPE_LIGHT);
+            proxSensor = sensors.getDefaultSensor(android.hardware.Sensor.TYPE_PROXIMITY);
+        }
+        if (lightSensor != null) sensors.registerListener(sensorListener, lightSensor, android.hardware.SensorManager.SENSOR_DELAY_NORMAL);
+        if (proxSensor != null) sensors.registerListener(sensorListener, proxSensor, android.hardware.SensorManager.SENSOR_DELAY_NORMAL);
+    }
+
+    private final android.hardware.SensorEventListener sensorListener = new android.hardware.SensorEventListener() {
+        public void onSensorChanged(android.hardware.SensorEvent e) {
+            if (e.sensor.getType() == android.hardware.Sensor.TYPE_LIGHT) {
+                lux = e.values[0];
+                float target = (float) Math.min(1.0, 0.02 + Math.log10(lux + 1) / 3.3 * 0.98);
+                bright = bright < 0 ? target : bright + (target - bright) * 0.35f;
+                boolean wasDark = darkRoom;
+                if (lux < 3) darkRoom = true;
+                else if (lux > 8) darkRoom = false; // hystereze, ať to neblikání
+                if (standbyOn && wasDark != darkRoom) styleStandby();
+                else applyBrightness();
+            } else if (e.sensor.getType() == android.hardware.Sensor.TYPE_PROXIMITY) {
+                boolean near = e.values[0] < Math.min(e.sensor.getMaximumRange(), 3f);
+                long now = System.currentTimeMillis();
+                if (near) {
+                    proxNearAt = now;
+                } else if (proxNearAt > 0 && now - proxNearAt < 2000) { // mávnutí = krátce blízko a pryč
+                    proxNearAt = 0;
+                    if (standbyOn) setStandby(false);
+                    lastTouch = now;
+                }
+            }
+        }
+
+        public void onAccuracyChanged(android.hardware.Sensor s, int a) {
+        }
+    };
+
     /** V noci (22–7) červeně a skoro zhasnuto, přes den normálně. */
     private void styleStandby() {
-        boolean dark = isNightHours(Calendar.getInstance());
+        boolean dark = isDark();
         int main = dark ? Ui.NIGHT : Ui.INK;
         int sub = dark ? Ui.NIGHT : Ui.ACCENT;
         int dim = dark ? Ui.NIGHT : Ui.DIM;
@@ -430,9 +521,7 @@ public class MainActivity extends Activity {
         sbPrev.setTextColor(dark ? Ui.NIGHT : Ui.INK);
         sbPlay.setTextColor(dark ? Ui.NIGHT : Ui.INK);
         sbNext.setTextColor(dark ? Ui.NIGHT : Ui.INK);
-        WindowManager.LayoutParams lp = getWindow().getAttributes();
-        lp.screenBrightness = dark ? 0.01f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
-        getWindow().setAttributes(lp);
+        applyBrightness();
     }
 
     // ------------------------------------------------------------------ budík
@@ -709,7 +798,7 @@ public class MainActivity extends Activity {
                 mArtist.setText("ťukni sem → Hodiny → Povolit");
             } else {
                 mTitle.setText("Nic nehraje");
-                mArtist.setText("ťukni pro Spotify");
+                mArtist.setText("ťukni pro rádio");
             }
             return;
         }
@@ -752,6 +841,91 @@ public class MainActivity extends Activity {
             Ui.launch(this, mc.getPackageName(), appLabel(mc.getPackageName()));
             return;
         }
-        Ui.launch(this, SPOTIFY, "Spotify");
+        startActivity(new Intent(this, RadioActivity.class));
+    }
+
+    // ------------------------------------------------------------------ svátek a narozeniny
+    private boolean todayLoading;
+
+    /** Z thermoprint-serveru (GET /api/today), jinak aspoň svátek ze svatky.adresa.info. Cache na den. */
+    private void loadToday(boolean force) {
+        final String day = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date());
+        String cached = Prefs.get(this).getString("today_" + day, null);
+        if (cached != null && !force) {
+            todayLine.setText(cached);
+            todayLine.setVisibility(cached.length() > 0 ? View.VISIBLE : View.GONE);
+            return;
+        }
+        if (todayLoading) return;
+        todayLoading = true;
+        new Thread(new Runnable() {
+            public void run() {
+                String line = null;
+                String token = Prefs.apiToken(MainActivity.this);
+                if (token.length() > 0) {
+                    try {
+                        java.net.HttpURLConnection con = (java.net.HttpURLConnection)
+                                new java.net.URL(Prefs.printerBase(MainActivity.this) + "/api/today").openConnection();
+                        con.setConnectTimeout(6000);
+                        con.setReadTimeout(15000);
+                        con.setRequestProperty("Authorization", "Bearer " + token);
+                        if (con.getResponseCode() == 200) {
+                            java.io.InputStream in = con.getInputStream();
+                            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                            byte[] buf = new byte[4096];
+                            int n;
+                            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                            line = formatToday(new JSONObject(out.toString("UTF-8")));
+                        }
+                        con.disconnect();
+                    } catch (Exception ignored) {
+                    }
+                }
+                if (line == null) { // server bez /api/today nebo nedostupný → jen svátek
+                    try {
+                        JSONArray j = new JSONArray(Prefs.http("https://svatky.adresa.info/json?date="
+                                + new SimpleDateFormat("ddMM", Locale.US).format(new java.util.Date())));
+                        StringBuilder sb = new StringBuilder();
+                        for (int i = 0; i < j.length(); i++) {
+                            String nm = j.getJSONObject(i).optString("name");
+                            if (nm.length() > 0) sb.append(sb.length() > 0 ? ", " : "").append(nm);
+                        }
+                        line = sb.length() > 0 ? "svátek má " + sb : "";
+                    } catch (Exception ignored) {
+                    }
+                }
+                final String l = line;
+                runOnUiThread(new Runnable() {
+                    public void run() {
+                        todayLoading = false;
+                        if (l == null) return; // zkusí se při dalším startu
+                        Prefs.get(MainActivity.this).edit().putString("today_" + day, l).apply();
+                        todayLine.setText(l);
+                        todayLine.setVisibility(l.length() > 0 ? View.VISIBLE : View.GONE);
+                    }
+                });
+            }
+        }).start();
+    }
+
+    private static String formatToday(JSONObject o) {
+        StringBuilder sb = new StringBuilder();
+        String nd = o.optString("nameday", "");
+        if (nd.length() > 0 && !"null".equals(nd)) sb.append("svátek má ").append(nd);
+        JSONArray b = o.optJSONArray("birthdays");
+        if (b != null) {
+            for (int i = 0; i < b.length(); i++) {
+                JSONObject x = b.optJSONObject(i);
+                int in = x.optInt("in_days", 99);
+                if (in > 2) continue; // na ploše jen dnes, zítra, pozítří
+                String when = in == 0 ? "dnes" : in == 1 ? "zítra" : "pozítří";
+                if (sb.length() > 0) sb.append("  ·  ");
+                sb.append("🎂 ").append(when).append(" ").append(x.optString("name"));
+                if (!x.isNull("age")) sb.append(" (").append(x.optInt("age")).append(")");
+            }
+        }
+        JSONArray hol = o.optJSONArray("holidays");
+        if (hol != null && hol.length() > 0 && sb.length() == 0) sb.append(hol.optString(0));
+        return sb.toString();
     }
 }

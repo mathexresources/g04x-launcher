@@ -30,14 +30,22 @@ in the order we actually did it, including the mistakes.
 
 ## What you get
 
-- **Home screen** (landscape 800×480): large clock, date, next alarm with countdown, weather, now-playing card, four icon tiles
-  (alarms · Spotify · printer · all apps).
+- **Home screen** (landscape 800×480): large clock, date, name day / birthdays, next alarm with countdown, weather,
+  now-playing card, five icon tiles (alarms · Spotify · radio · printer · all apps).
 - **Own alarm clock** – the system clock app on the GSI just flashed a black screen, so the launcher has its own:
   one-off by default ("ring at the next 6:30"), optional repeat days, snooze 9 min, any hardware button = snooze,
   auto-snooze after 10 min, survives reboots. Ducks Spotify while ringing.
 - **Standby** after 15 s without touch: only the time, the alarm (with countdown) and – if something is playing –
   music controls at the bottom that work without waking the screen. Between 22:00 and 07:00 it turns dim red
   at ~1 % brightness. Any touch outside the music bar wakes it (the first touch never launches anything).
+- **Auto brightness** from the light sensor (log curve, smoothed); standby turns red when the *room* is dark
+  (light sensor), not just by the clock. **Wave your hand** over the clock (proximity sensor) to wake it from standby.
+  **Burn-in protection**: standby content shifts by a few pixels every minute.
+- **Name day & birthdays** under the date ("svátek má Albert · 🎂 zítra Máma (56)") from thermoprint's `GET /api/today`;
+  without the server it still shows the name day from svatky.adresa.info.
+- **Internet radio** (📻 tile): most-played Czech stations from [radio-browser.info](https://www.radio-browser.info),
+  search, ★ favourites; plays in a foreground service with its own MediaSession, so the music card, standby controls
+  and ⏮/⏭ (switch between favourites) work like with Spotify. Pauses for the alarm and resumes after. Much lighter than Spotify.
 - **Weather** from [wttr.in](https://wttr.in) (no API key): current temp, condition, min/max, rain chance,
   next hours. Default location is Prague (by coordinates); tap = refresh, long-press = settings.
 - **Music card** for whatever is playing (Spotify, SoundCloud, …) via Android MediaSession.
@@ -386,6 +394,8 @@ src/cz/mathex/hodiny/
   AlarmReceiver.java    fires the alarm, reschedules after boot / time change / update
   RingActivity.java     ringing screen (snooze / stop), morning print trigger
   PrinterActivity.java  native printer control panel (thermoprint API)
+  RadioActivity.java    station list (radio-browser.info), search, favourites
+  RadioService.java     radio playback + MediaSession (foreground service)
   AppsActivity.java     app drawer
   Prefs.java            settings dialog, HTTP helper, thermoprint API call
   Updater.java          GitHub Releases check + PackageInstaller session
