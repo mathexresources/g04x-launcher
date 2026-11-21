@@ -117,7 +117,7 @@ public class MainActivity extends Activity {
         left.setGravity(Gravity.CENTER_VERTICAL);
         topRow.addView(left, Ui.lp(0, -1, 1f));
 
-        date = Ui.text(this, "", .04f, Ui.DIM);
+        date = Ui.text(this, "", .044f, Ui.DIM);
         left.addView(date);
 
         clock = Ui.text(this, "--:--", .325f, Ui.INK);
@@ -137,11 +137,11 @@ public class MainActivity extends Activity {
         alarmPill.setGravity(Gravity.CENTER_VERTICAL);
         alarmPill.setBackground(Ui.tile(this, Ui.AMBER_BG, .033f));
         alarmPill.setPadding(px(.025f), px(.021f), px(.033f), px(.021f));
-        alarmPill.addView(Ui.icon(this, R.drawable.ic_alarm, Ui.AMBER, .046f));
-        alarmTime = Ui.text(this, "", .035f, Ui.AMBER);
+        alarmPill.addView(Ui.icon(this, R.drawable.ic_alarm, Ui.AMBER, .052f));
+        alarmTime = Ui.text(this, "", .04f, Ui.AMBER);
         alarmTime.setTypeface(Ui.medium());
         alarmPill.addView(alarmTime, Ui.left(this, .02f));
-        alarmLeft = Ui.text(this, "", .035f, Ui.AMBER_SOFT);
+        alarmLeft = Ui.text(this, "", .04f, Ui.AMBER_SOFT);
         alarmLeft.setSingleLine(true);
         alarmLeft.setEllipsize(TextUtils.TruncateAt.END);
         alarmPill.addView(alarmLeft, Ui.left(this, .012f));
@@ -182,11 +182,11 @@ public class MainActivity extends Activity {
         wTemp.setLetterSpacing(-0.03f);
         wRow.addView(wTemp, Ui.left(this, .025f));
         wCard.addView(wRow);
-        wDesc = Ui.text(this, "načítám počasí…", .033f, Ui.INK);
+        wDesc = Ui.text(this, "načítám počasí…", .037f, Ui.INK);
         wDesc.setSingleLine(true);
         wDesc.setEllipsize(TextUtils.TruncateAt.END);
         wCard.addView(wDesc, Ui.top(this, .02f));
-        wRange = Ui.text(this, "", .029f, Ui.DIM);
+        wRange = Ui.text(this, "", .033f, Ui.DIM);
         wCard.addView(wRange, Ui.top(this, .012f));
         View line = new View(this);
         line.setBackgroundColor(Ui.LINE);
@@ -217,16 +217,16 @@ public class MainActivity extends Activity {
         LinearLayout art = Ui.box(this, false);
         art.setGravity(Gravity.CENTER);
         art.setBackground(Ui.round(Ui.TEAL_BG, px(.031f)));
-        mArtIcon = Ui.icon(this, R.drawable.ic_radio, Ui.TEAL, .058f);
+        mArtIcon = Ui.icon(this, R.drawable.ic_radio, Ui.TEAL, .066f);
         art.addView(mArtIcon);
         media.addView(art, new LinearLayout.LayoutParams(px(.125f), px(.125f)));
 
         LinearLayout mt = Ui.box(this, true);
-        mTitle = Ui.text(this, "Nic nehraje", .033f, Ui.INK);
+        mTitle = Ui.text(this, "Nic nehraje", .038f, Ui.INK);
         mTitle.setTypeface(Ui.medium());
         mTitle.setSingleLine(true);
         mTitle.setEllipsize(TextUtils.TruncateAt.END);
-        mSub = Ui.text(this, "ťukni pro rádio", .027f, Ui.DIM);
+        mSub = Ui.text(this, "ťukni pro rádio", .031f, Ui.DIM);
         mSub.setSingleLine(true);
         mSub.setEllipsize(TextUtils.TruncateAt.END);
         mt.addView(mTitle);
@@ -235,9 +235,9 @@ public class MainActivity extends Activity {
         mtl.leftMargin = px(.025f);
         media.addView(mt, mtl);
 
-        bPrev = Ui.roundButton(this, R.drawable.ic_prev, Ui.SOFT, 0, .092f, .046f);
-        bPlay = Ui.roundButton(this, R.drawable.ic_play, Ui.ON_AMBER, Ui.AMBER, .117f, .046f);
-        bNext = Ui.roundButton(this, R.drawable.ic_next, Ui.SOFT, 0, .092f, .046f);
+        bPrev = Ui.roundButton(this, R.drawable.ic_prev, Ui.SOFT, 0, .092f, .052f);
+        bPlay = Ui.roundButton(this, R.drawable.ic_play, Ui.ON_AMBER, Ui.AMBER, .117f, .052f);
+        bNext = Ui.roundButton(this, R.drawable.ic_next, Ui.SOFT, 0, .092f, .052f);
         media.addView(bPrev);
         media.addView(bPlay);
         media.addView(bNext);
@@ -309,7 +309,7 @@ public class MainActivity extends Activity {
         LinearLayout t = Ui.box(this, false);
         t.setGravity(Gravity.CENTER);
         t.setBackground(Ui.tile(this));
-        t.addView(Ui.icon(this, icon, color, .0625f));
+        t.addView(Ui.icon(this, icon, color, .075f));
         t.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 action.run();
@@ -326,20 +326,21 @@ public class MainActivity extends Activity {
 
         sbCenter = Ui.box(this, true);
         sbCenter.setGravity(Gravity.CENTER);
-        sbDate = Ui.text(this, "", .0375f, Ui.FAINT);
-        sbCenter.addView(sbDate);
+        sbDate = Ui.text(this, "", .044f, Ui.DIM);
+        sbDate.setGravity(Gravity.CENTER_HORIZONTAL);
+        sbCenter.addView(sbDate, new LinearLayout.LayoutParams(-2, -2));
         sbClock = Ui.text(this, "", .48f, Ui.INK);
-        sbClock.setTypeface(Ui.light());
+        sbClock.setTypeface(Ui.display());
         sbClock.setLetterSpacing(-0.045f);
         sbCenter.addView(sbClock, Ui.top(this, .02f));
         sbAlarm = Ui.box(this, false);
         sbAlarm.setGravity(Gravity.CENTER_VERTICAL);
-        sbAlarmIcon = Ui.icon(this, R.drawable.ic_alarm, Ui.AMBER, .046f);
+        sbAlarmIcon = Ui.icon(this, R.drawable.ic_alarm, Ui.AMBER, .054f);
         sbAlarm.addView(sbAlarmIcon);
-        sbAlarmTime = Ui.text(this, "", .042f, Ui.AMBER);
+        sbAlarmTime = Ui.text(this, "", .048f, Ui.AMBER);
         sbAlarmTime.setTypeface(Ui.medium());
         sbAlarm.addView(sbAlarmTime, Ui.left(this, .02f));
-        sbAlarmLeft = Ui.text(this, "", .042f, Ui.AMBER_SOFT);
+        sbAlarmLeft = Ui.text(this, "", .048f, Ui.AMBER_SOFT);
         sbAlarm.addView(sbAlarmLeft, Ui.left(this, .012f));
         sbCenter.addView(sbAlarm, Ui.top(this, .045f));
         FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(-1, -1);
@@ -350,21 +351,21 @@ public class MainActivity extends Activity {
         sbMedia.setGravity(Gravity.CENTER_VERTICAL);
         sbMedia.setBackground(Ui.round(Ui.PILL, px(.5f)));
         sbMedia.setPadding(px(.0375f), px(.012f), px(.02f), px(.012f));
-        sbMediaIcon = Ui.icon(this, R.drawable.ic_radio, Ui.TEAL, .0375f);
+        sbMediaIcon = Ui.icon(this, R.drawable.ic_radio, Ui.TEAL, .046f);
         sbMedia.addView(sbMediaIcon);
-        sbTitle = Ui.text(this, "", .031f, Ui.SOFT);
+        sbTitle = Ui.text(this, "", .036f, Ui.SOFT);
         sbTitle.setSingleLine(true);
         sbTitle.setEllipsize(TextUtils.TruncateAt.END);
         sbTitle.setMaxWidth(px(.6f));
         sbMedia.addView(sbTitle, Ui.left(this, .025f));
-        sbSub = Ui.text(this, "", .027f, Ui.FAINT);
+        sbSub = Ui.text(this, "", .031f, Ui.DIM);
         sbSub.setSingleLine(true);
         sbSub.setEllipsize(TextUtils.TruncateAt.END);
         sbSub.setMaxWidth(px(.35f));
         sbMedia.addView(sbSub, Ui.left(this, .02f));
-        sbPrev = Ui.roundButton(this, R.drawable.ic_prev, Ui.DIM, 0, .092f, .0375f);
-        sbPlay = Ui.roundButton(this, R.drawable.ic_pause, Ui.INK, 0xFF1C2128, .092f, .0375f);
-        sbNext = Ui.roundButton(this, R.drawable.ic_next, Ui.DIM, 0, .092f, .0375f);
+        sbPrev = Ui.roundButton(this, R.drawable.ic_prev, Ui.DIM, 0, .092f, .046f);
+        sbPlay = Ui.roundButton(this, R.drawable.ic_pause, Ui.INK, 0xFF1C2128, .092f, .046f);
+        sbNext = Ui.roundButton(this, R.drawable.ic_next, Ui.DIM, 0, .092f, .046f);
         LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(px(.092f), px(.092f));
         pl.leftMargin = px(.02f);
         sbMedia.addView(sbPrev, pl);
@@ -571,7 +572,7 @@ public class MainActivity extends Activity {
         Ui.tint(sbAlarmIcon, dark ? Ui.NIGHT : Ui.AMBER);
         sbMedia.setBackground(Ui.round(dark ? 0xFF140707 : Ui.PILL, px(.5f)));
         sbTitle.setTextColor(dark ? Ui.NIGHT : Ui.SOFT);
-        sbSub.setTextColor(dark ? Ui.NIGHT : Ui.FAINT);
+        sbSub.setTextColor(dark ? Ui.NIGHT : Ui.DIM);
         Ui.tint(sbMediaIcon, dark ? Ui.NIGHT : Ui.TEAL);
         Ui.tint((ImageView) sbPrev.getChildAt(0), dark ? Ui.NIGHT : Ui.DIM);
         Ui.tint((ImageView) sbPlay.getChildAt(0), dark ? Ui.NIGHT : Ui.INK);
@@ -822,12 +823,12 @@ public class MainActivity extends Activity {
                     if (d == 0 && at <= hr) continue;
                     LinearLayout col = Ui.box(this, true);
                     col.setGravity(Gravity.CENTER_HORIZONTAL);
-                    col.addView(Ui.text(this, at + "h", .027f, Ui.DIM));
-                    ImageView ic = Ui.icon(this, weatherIcon((int) num(h, "weatherCode"), at >= 7 && at < 19), Ui.SOFT, .046f);
+                    col.addView(Ui.text(this, at + "h", .031f, Ui.DIM));
+                    ImageView ic = Ui.icon(this, weatherIcon((int) num(h, "weatherCode"), at >= 7 && at < 19), Ui.SOFT, .052f);
                     LinearLayout.LayoutParams il = (LinearLayout.LayoutParams) ic.getLayoutParams();
                     il.topMargin = il.bottomMargin = px(.012f);
                     col.addView(ic);
-                    TextView t = Ui.text(this, num(h, "tempC") + "°", .031f, Ui.INK);
+                    TextView t = Ui.text(this, num(h, "tempC") + "°", .036f, Ui.INK);
                     col.addView(t);
                     hours.addView(col, Ui.lp(0, -2, 1f));
                     shown++;
@@ -1099,7 +1100,7 @@ public class MainActivity extends Activity {
     }
 
     private void addChip(int icon, int iconColor, String text) {
-        LinearLayout c = Ui.chip(this, icon, iconColor, text, Ui.SOFT, Ui.TILE, .031f);
+        LinearLayout c = Ui.chip(this, icon, iconColor, text, Ui.SOFT, Ui.TILE, .035f);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, -2);
         if (chips.getChildCount() > 0) p.leftMargin = px(.017f);
         chips.addView(c, p);

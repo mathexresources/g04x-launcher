@@ -31,7 +31,7 @@ in the order we actually did it, including the mistakes.
 ## What you get
 
 Design **"Ember"** (since 2.1): warm dark background, amber for alarms & playback, teal for weather & radio,
-Space Grotesk numerals, Inter text, vector icons instead of emoji.
+Space Grotesk numerals, system Roboto text (sharper than Inter on the 480p panel), vector icons instead of emoji.
 
 - **Home screen** (landscape 800×480): large clock, date, name day / birthdays, next alarm with countdown, weather,
   now-playing card, five icon tiles (alarms · Spotify · radio · printer · all apps).
@@ -412,7 +412,7 @@ src/cz/mathex/hodiny/
   MediaListener.java    empty NotificationListenerService (needed for MediaSession access)
   ClapDetector.java     double-clap detection from the microphone (loudness only)
   Ui.java               "Ember" colours, fonts, icons, sizes, helpers
-assets/fonts/           Space Grotesk + Inter (static Latin-Ext subsets, SIL OFL – licences included)
+assets/fonts/           Space Grotesk (static Latin-Ext subsets, SIL OFL – licence included)
 res/drawable/           vector icons
 ```
 
@@ -437,5 +437,5 @@ res/drawable/           vector icons
 - [octathorp/x04g_tools](https://github.com/octathorp/x04g_tools) and the XDA development thread
 - [View Assist](https://dinki.github.io/View-Assist/) guide for the Xiaomi Smart Clock
 - [wttr.in](https://wttr.in) for weather, [radio-browser.info](https://www.radio-browser.info) for radio stations
-- [Space Grotesk](https://github.com/floriankarsten/space-grotesk) and [Inter](https://rsms.me/inter/) fonts (SIL OFL 1.1)
+- [Space Grotesk](https://github.com/floriankarsten/space-grotesk) font (SIL OFL 1.1)
 - Written with Claude (Anthropic) in one long chat. Vibe coded, human tested.

@@ -21,7 +21,7 @@ import android.widget.Toast;
 
 /**
  * Design „Ember“: teplý tmavý podklad, jantar pro budík a přehrávání, tyrkys pro počasí a rádio,
- * čísla Space Grotesk, texty Inter. Všechny rozměry jsou poměrem k výšce displeje (480 px = 1.0).
+ * čísla Space Grotesk, texty systémové Roboto (ostřejší na 480p). Všechny rozměry jsou poměrem k výšce displeje (480 px = 1.0).
  */
 final class Ui {
     static final int BG = 0xFF0F1216;
@@ -69,8 +69,9 @@ final class Ui {
         if (interRegular != null) return;
         spaceLight = font(c, "space_light.ttf", Typeface.create("sans-serif-light", Typeface.NORMAL));
         spaceRegular = font(c, "space_regular.ttf", Typeface.create("sans-serif", Typeface.NORMAL));
-        interRegular = font(c, "inter_regular.ttf", Typeface.create("sans-serif", Typeface.NORMAL));
-        interSemi = font(c, "inter_semibold.ttf", Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        // texty: systémové Roboto – je hintované a na displeji 480p ostřejší než Inter
+        interRegular = Typeface.create("sans-serif", Typeface.NORMAL);
+        interSemi = Typeface.create("sans-serif-medium", Typeface.NORMAL);
     }
 
     /** Čísla – Space Grotesk Light / Regular. */
@@ -82,7 +83,7 @@ final class Ui {
         return spaceRegular;
     }
 
-    /** Texty – Inter. */
+    /** Texty – systémové Roboto. */
     static Typeface regular() {
         return interRegular;
     }

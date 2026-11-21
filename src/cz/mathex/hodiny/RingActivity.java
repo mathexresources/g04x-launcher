@@ -63,7 +63,7 @@ public class RingActivity extends Activity {
         TextView cl = Ui.text(this, "Budík", .035f, Ui.AMBER);
         cl.setTypeface(Ui.medium());
         chip.addView(cl, Ui.left(this, .02f));
-        center.addView(chip);
+        center.addView(chip, new LinearLayout.LayoutParams(-2, -2));
 
         Calendar c = Calendar.getInstance();
         TextView time = Ui.text(this, c.get(Calendar.HOUR_OF_DAY) + ":"
@@ -77,7 +77,7 @@ public class RingActivity extends Activity {
             LinearLayout pr = Ui.box(this, false);
             pr.setGravity(Gravity.CENTER_VERTICAL);
             pr.addView(Ui.icon(this, R.drawable.ic_printer, Ui.DIM, .0375f));
-            pr.addView(Ui.text(this, "po vypnutí se vytiskne ranní zpráva", .033f, Ui.DIM), Ui.left(this, .017f));
+            pr.addView(Ui.text(this, "po vypnutí se vytiskne ranní zpráva", .037f, Ui.DIM), Ui.left(this, .017f));
             center.addView(pr, Ui.top(this, .025f));
         }
 
