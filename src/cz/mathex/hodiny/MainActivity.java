@@ -965,6 +965,8 @@ public class MainActivity extends Activity {
             cp.bottomMargin = bm;
             sbCenter.setLayoutParams(cp);
         }
+        // když nic nehraje, je na čas celá obrazovka
+        sbClock.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, Ui.base(this) * (mc != null ? .42f : .58f));
         if (standbyOn) styleStandby();
         if (mc == null) {
             mArtIcon.setImageResource(R.drawable.ic_radio);
