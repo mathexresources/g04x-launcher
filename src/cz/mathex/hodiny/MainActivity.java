@@ -39,7 +39,8 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     private static final Locale CS = new Locale("cs", "CZ");
     private static final long WEATHER_EVERY = 15 * 60 * 1000L;
-    private static final long NIGHT_IDLE = 60 * 1000L;
+    private static final long STANDBY_IDLE = 15 * 1000L;
+    private static final String PREV = "\u23EE\uFE0E", PLAY = "\u25B6\uFE0E", PAUSE = "\u23F8\uFE0E", NEXT = "\u23ED\uFE0E";
     private static final String SPOTIFY = "com.spotify.music";
 
     private final Handler h = new Handler(Looper.getMainLooper());
@@ -47,8 +48,10 @@ public class MainActivity extends Activity {
 
     private TextView clock, date, alarm, wIcon, wTemp, wDesc, wRange, wHours;
     private TextView mTitle, mArtist, bPrev, bPlay, bNext;
-    private FrameLayout night;
-    private TextView nightClock;
+    private FrameLayout standby;
+    private LinearLayout sbMedia;
+    private TextView sbClock, sbAlarm, sbTitle, sbPrev, sbPlay, sbNext;
+    private boolean standbyOn;
 
     private MediaSessionManager msm;
     private MediaController mc;
@@ -56,7 +59,6 @@ public class MainActivity extends Activity {
     private boolean needMediaPermission;
 
     private long lastTouch = System.currentTimeMillis();
-    private long lastAlarm;
     private boolean swallowTouch;
 
     // ------------------------------------------------------------------ layout
@@ -67,7 +69,7 @@ public class MainActivity extends Activity {
         FrameLayout root = new FrameLayout(this);
 
         LinearLayout main = Ui.box(this, true);
-        main.setPadding(px(.06f), px(.05f), px(.06f), px(.05f));
+        main.setPadding(px(.05f), px(.04f), px(.05f), px(.04f));
         root.addView(main, new FrameLayout.LayoutParams(-1, -1));
 
         // horní část: hodiny vlevo, počasí vpravo
@@ -78,26 +80,28 @@ public class MainActivity extends Activity {
         left.setGravity(Gravity.CENTER_VERTICAL);
         topRow.addView(left, Ui.lp(0, -1, 1.45f));
 
-        clock = Ui.text(this, "--:--", .30f, Ui.INK);
+        clock = Ui.text(this, "--:--", .26f, Ui.INK);
         clock.setTypeface(Ui.light());
         clock.setLetterSpacing(-0.02f);
         clock.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                setNight(true);
+                setStandby(true);
             }
         });
         left.addView(clock);
 
-        date = Ui.text(this, "", .062f, Ui.INK);
-        left.addView(date, Ui.top(this, .025f));
+        date = Ui.text(this, "", .058f, Ui.INK);
+        left.addView(date, Ui.top(this, .012f));
 
-        alarm = Ui.text(this, "", .055f, Ui.ACCENT);
+        alarm = Ui.text(this, "", .046f, Ui.ACCENT);
+        alarm.setSingleLine(true);
+        alarm.setEllipsize(TextUtils.TruncateAt.END);
         alarm.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 showAlarms();
             }
         });
-        left.addView(alarm, Ui.top(this, .03f));
+        left.addView(alarm, Ui.top(this, .02f));
 
         LinearLayout right = Ui.box(this, true);
         right.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
@@ -117,8 +121,8 @@ public class MainActivity extends Activity {
 
         LinearLayout wRow = Ui.box(this, false);
         wRow.setGravity(Gravity.CENTER_VERTICAL);
-        wIcon = Ui.text(this, "", .10f, Ui.INK);
-        wTemp = Ui.text(this, "--°", .15f, Ui.INK);
+        wIcon = Ui.text(this, "", .09f, Ui.INK);
+        wTemp = Ui.text(this, "--°", .13f, Ui.INK);
         wTemp.setTypeface(Ui.light());
         wRow.addView(wIcon);
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, -2);
@@ -126,12 +130,12 @@ public class MainActivity extends Activity {
         wRow.addView(wTemp, tp);
         right.addView(wRow);
 
-        wDesc = rightText("načítám počasí…", .05f, Ui.INK);
-        right.addView(wDesc, Ui.top(this, .02f));
-        wRange = rightText("", .044f, Ui.DIM);
-        right.addView(wRange, Ui.top(this, .015f));
-        wHours = rightText("", .04f, Ui.DIM);
-        right.addView(wHours, Ui.top(this, .025f));
+        wDesc = rightText("načítám počasí…", .045f, Ui.INK);
+        right.addView(wDesc, Ui.top(this, .015f));
+        wRange = rightText("", .04f, Ui.DIM);
+        right.addView(wRange, Ui.top(this, .012f));
+        wHours = rightText("", .036f, Ui.DIM);
+        right.addView(wHours, Ui.top(this, .02f));
 
         // karta hudby
         LinearLayout media = Ui.box(this, false);
@@ -143,80 +147,113 @@ public class MainActivity extends Activity {
                 openPlayer();
             }
         });
-        LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-1, px(.17f));
-        mp.topMargin = px(.035f);
+        LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-1, px(.14f));
+        mp.topMargin = px(.025f);
         main.addView(media, mp);
 
         LinearLayout mt = Ui.box(this, true);
-        mTitle = Ui.text(this, "Nic nehraje", .05f, Ui.INK);
+        mTitle = Ui.text(this, "Nic nehraje", .045f, Ui.INK);
         mTitle.setTypeface(Ui.medium());
         mTitle.setSingleLine(true);
         mTitle.setEllipsize(TextUtils.TruncateAt.END);
-        mArtist = Ui.text(this, "ťukni pro Spotify", .04f, Ui.DIM);
+        mArtist = Ui.text(this, "ťukni pro Spotify", .036f, Ui.DIM);
         mArtist.setSingleLine(true);
         mArtist.setEllipsize(TextUtils.TruncateAt.END);
         mt.addView(mTitle);
-        mt.addView(mArtist, Ui.top(this, .012f));
+        mt.addView(mArtist, Ui.top(this, .01f));
         media.addView(mt, Ui.lp(0, -2, 1f));
 
-        bPrev = control("⏮︎");
-        bPlay = control("▶︎");
-        bNext = control("⏭︎");
-        media.addView(bPrev, new LinearLayout.LayoutParams(px(.17f), -1));
-        media.addView(bPlay, new LinearLayout.LayoutParams(px(.17f), -1));
-        media.addView(bNext, new LinearLayout.LayoutParams(px(.17f), -1));
-        bPrev.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                if (mc != null) mc.getTransportControls().skipToPrevious();
-            }
-        });
-        bPlay.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                if (mc == null) return;
-                if (isPlaying(mc)) mc.getTransportControls().pause();
-                else mc.getTransportControls().play();
-            }
-        });
-        bNext.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                if (mc != null) mc.getTransportControls().skipToNext();
-            }
-        });
+        bPrev = control(PREV, .065f);
+        bPlay = control(PLAY, .065f);
+        bNext = control(NEXT, .065f);
+        media.addView(bPrev, new LinearLayout.LayoutParams(px(.15f), -1));
+        media.addView(bPlay, new LinearLayout.LayoutParams(px(.15f), -1));
+        media.addView(bNext, new LinearLayout.LayoutParams(px(.15f), -1));
 
-        // dlaždice
+        // dlaždice – jen ikony
         LinearLayout tiles = Ui.box(this, false);
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, px(.22f));
-        tl.topMargin = px(.035f);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, px(.15f));
+        tl.topMargin = px(.025f);
         main.addView(tiles, tl);
-        addTile(tiles, "⏰", "Budík", new Runnable() {
+        addTile(tiles, "⏰", new Runnable() {
             public void run() {
                 showAlarms();
             }
         });
-        addTile(tiles, "🎵", "Spotify", new Runnable() {
+        addTile(tiles, "🎵", new Runnable() {
             public void run() {
                 Ui.launch(MainActivity.this, SPOTIFY, "Spotify");
             }
         });
-        addTile(tiles, "🖨", "Tiskárna", new Runnable() {
+        addTile(tiles, "🖨", new Runnable() {
             public void run() {
                 startActivity(new Intent(MainActivity.this, WebActivity.class));
             }
         });
-        addTile(tiles, "⋯", "Aplikace", new Runnable() {
+        addTile(tiles, "⋯", new Runnable() {
             public void run() {
                 startActivity(new Intent(MainActivity.this, AppsActivity.class));
             }
         });
 
-        // noční hodiny přes celou obrazovku
-        night = new FrameLayout(this);
-        night.setBackgroundColor(0xFF000000);
-        nightClock = Ui.text(this, "", .42f, Ui.NIGHT);
-        nightClock.setTypeface(Ui.light());
-        night.addView(nightClock, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
-        night.setVisibility(View.GONE);
-        root.addView(night, new FrameLayout.LayoutParams(-1, -1));
+        // standby přes celou obrazovku: čas, budík, dole ovládání hudby
+        standby = new FrameLayout(this);
+        standby.setBackgroundColor(0xFF000000);
+        LinearLayout sbCenter = Ui.box(this, true);
+        sbCenter.setGravity(Gravity.CENTER);
+        sbClock = Ui.text(this, "", .40f, Ui.INK);
+        sbClock.setTypeface(Ui.light());
+        sbClock.setLetterSpacing(-0.02f);
+        sbCenter.addView(sbClock);
+        sbAlarm = Ui.text(this, "", .055f, Ui.ACCENT);
+        sbCenter.addView(sbAlarm, Ui.top(this, .02f));
+        FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(-1, -1);
+        cp.bottomMargin = px(.14f);
+        standby.addView(sbCenter, cp);
+
+        sbMedia = Ui.box(this, false);
+        sbMedia.setGravity(Gravity.CENTER_VERTICAL);
+        sbMedia.setPadding(px(.06f), 0, px(.04f), 0);
+        sbTitle = Ui.text(this, "", .042f, Ui.DIM);
+        sbTitle.setSingleLine(true);
+        sbTitle.setEllipsize(TextUtils.TruncateAt.END);
+        sbMedia.addView(sbTitle, Ui.lp(0, -2, 1f));
+        sbPrev = control(PREV, .06f);
+        sbPlay = control(PLAY, .06f);
+        sbNext = control(NEXT, .06f);
+        sbMedia.addView(sbPrev, new LinearLayout.LayoutParams(px(.15f), -1));
+        sbMedia.addView(sbPlay, new LinearLayout.LayoutParams(px(.15f), -1));
+        sbMedia.addView(sbNext, new LinearLayout.LayoutParams(px(.15f), -1));
+        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(-1, px(.16f), Gravity.BOTTOM);
+        bp.bottomMargin = px(.03f);
+        standby.addView(sbMedia, bp);
+        sbMedia.setVisibility(View.GONE);
+        standby.setVisibility(View.GONE);
+        root.addView(standby, new FrameLayout.LayoutParams(-1, -1));
+
+        View.OnClickListener prev = new View.OnClickListener() {
+            public void onClick(View v) {
+                if (mc != null) mc.getTransportControls().skipToPrevious();
+            }
+        };
+        View.OnClickListener play = new View.OnClickListener() {
+            public void onClick(View v) {
+                if (mc == null) return;
+                if (isPlaying(mc)) mc.getTransportControls().pause();
+                else mc.getTransportControls().play();
+            }
+        };
+        View.OnClickListener next = new View.OnClickListener() {
+            public void onClick(View v) {
+                if (mc != null) mc.getTransportControls().skipToNext();
+            }
+        };
+        bPrev.setOnClickListener(prev);
+        sbPrev.setOnClickListener(prev);
+        bPlay.setOnClickListener(play);
+        sbPlay.setOnClickListener(play);
+        bNext.setOnClickListener(next);
+        sbNext.setOnClickListener(next);
 
         setContentView(root);
 
@@ -236,20 +273,18 @@ public class MainActivity extends Activity {
         return t;
     }
 
-    private TextView control(String symbol) {
-        TextView t = Ui.text(this, symbol, .075f, Ui.INK);
+    private TextView control(String symbol, float size) {
+        TextView t = Ui.text(this, symbol, size, Ui.INK);
         t.setGravity(Gravity.CENTER);
         t.setBackground(Ui.press(this));
         return t;
     }
 
-    private void addTile(LinearLayout row, String icon, String label, final Runnable action) {
+    private void addTile(LinearLayout row, String icon, final Runnable action) {
         LinearLayout t = Ui.box(this, true);
         t.setGravity(Gravity.CENTER);
         t.setBackground(Ui.tile(this));
-        t.addView(Ui.text(this, icon, .075f, Ui.INK));
-        TextView l = Ui.text(this, label, .042f, Ui.INK);
-        t.addView(l, Ui.top(this, .02f));
+        t.addView(Ui.text(this, icon, .085f, Ui.INK));
         t.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 action.run();
@@ -286,7 +321,10 @@ public class MainActivity extends Activity {
     @Override
     public void onWindowFocusChanged(boolean focus) {
         super.onWindowFocusChanged(focus);
-        if (focus) Ui.immersive(this);
+        if (focus) {
+            Ui.immersive(this);
+            lastTouch = System.currentTimeMillis();
+        }
     }
 
     @Override
@@ -304,20 +342,31 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent i) {
         super.onNewIntent(i);
-        setNight(false); // tlačítko Domů
+        setStandby(false); // tlačítko Domů
     }
 
     @Override
     public void onBackPressed() {
-        setNight(false); // launcher se zpět nezavírá
+        setStandby(false); // launcher se zpět nezavírá
+    }
+
+    private static boolean inside(View v, MotionEvent e) {
+        if (v.getVisibility() != View.VISIBLE) return false;
+        int[] loc = new int[2];
+        v.getLocationOnScreen(loc);
+        float x = e.getRawX(), y = e.getRawY();
+        return x >= loc[0] && x < loc[0] + v.getWidth() && y >= loc[1] && y < loc[1] + v.getHeight();
     }
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent e) {
         lastTouch = System.currentTimeMillis();
-        if (e.getActionMasked() == MotionEvent.ACTION_DOWN && night.getVisibility() == View.VISIBLE) {
-            setNight(false);
-            swallowTouch = true; // první dotek jen probudí, nic nespustí
+        if (e.getActionMasked() == MotionEvent.ACTION_DOWN && standbyOn) {
+            if (!inside(sbMedia, e)) {
+                setStandby(false);
+                swallowTouch = true; // první dotek jen probudí, nic nespustí
+            }
+            // dotek na ovládání hudby projde a standby zůstane
         }
         if (swallowTouch) {
             if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL) {
@@ -328,7 +377,7 @@ public class MainActivity extends Activity {
         return super.dispatchTouchEvent(e);
     }
 
-    // ------------------------------------------------------------------ hodiny a noc
+    // ------------------------------------------------------------------ hodiny a standby
     private final Runnable tick = new Runnable() {
         public void run() {
             long now = System.currentTimeMillis();
@@ -336,14 +385,13 @@ public class MainActivity extends Activity {
             String t = c.get(Calendar.HOUR_OF_DAY) + ":" + two(c.get(Calendar.MINUTE));
             if (!t.contentEquals(clock.getText())) {
                 clock.setText(t);
-                nightClock.setText(t);
+                sbClock.setText(t);
                 date.setText(dateFmt.format(c.getTime()));
+                updateAlarm(); // odpočet do budíku
+                if (standbyOn) styleStandby();
             }
-            if (now - lastAlarm > 60000) updateAlarm();
             if (now - Prefs.get(MainActivity.this).getLong("weather_ts", 0) > WEATHER_EVERY) loadWeather();
-            if (isNightHours(c) && now - lastTouch > NIGHT_IDLE && night.getVisibility() != View.VISIBLE) {
-                setNight(true);
-            }
+            if (!standbyOn && hasWindowFocus() && now - lastTouch > STANDBY_IDLE) setStandby(true);
             h.postDelayed(this, 1000);
         }
     };
@@ -357,14 +405,34 @@ public class MainActivity extends Activity {
         return hr >= 22 || hr < 7;
     }
 
-    private void setNight(boolean on) {
+    private void setStandby(boolean on) {
+        standbyOn = on;
+        standby.setVisibility(on ? View.VISIBLE : View.GONE);
+        if (on) {
+            styleStandby();
+        } else {
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+            getWindow().setAttributes(lp);
+            lastTouch = System.currentTimeMillis();
+        }
+    }
+
+    /** V noci (22–7) červeně a skoro zhasnuto, přes den normálně. */
+    private void styleStandby() {
         boolean dark = isNightHours(Calendar.getInstance());
-        night.setVisibility(on ? View.VISIBLE : View.GONE);
-        nightClock.setTextColor(dark ? Ui.NIGHT : Ui.DIM);
+        int main = dark ? Ui.NIGHT : Ui.INK;
+        int sub = dark ? Ui.NIGHT : Ui.ACCENT;
+        int dim = dark ? Ui.NIGHT : Ui.DIM;
+        sbClock.setTextColor(main);
+        sbAlarm.setTextColor(sub);
+        sbTitle.setTextColor(dim);
+        sbPrev.setTextColor(dark ? Ui.NIGHT : Ui.INK);
+        sbPlay.setTextColor(dark ? Ui.NIGHT : Ui.INK);
+        sbNext.setTextColor(dark ? Ui.NIGHT : Ui.INK);
         WindowManager.LayoutParams lp = getWindow().getAttributes();
-        lp.screenBrightness = on ? (dark ? 0.01f : 0.25f) : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+        lp.screenBrightness = dark ? 0.01f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
         getWindow().setAttributes(lp);
-        if (!on) lastTouch = System.currentTimeMillis();
     }
 
     // ------------------------------------------------------------------ budík
@@ -374,13 +442,20 @@ public class MainActivity extends Activity {
         }
     };
 
+    private static String countdown(long ms) {
+        long min = (ms + 59999) / 60000;
+        if (min >= 48 * 60) return "za " + (min / (24 * 60)) + " dny";
+        if (min >= 60) return "za " + (min / 60) + " h" + (min % 60 > 0 ? " " + (min % 60) + " min" : "");
+        return "za " + min + " min";
+    }
+
     private void updateAlarm() {
-        lastAlarm = System.currentTimeMillis();
         AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
         AlarmManager.AlarmClockInfo ai = am.getNextAlarmClock();
         if (ai == null) {
             alarm.setText("⏰  žádný budík");
             alarm.setTextColor(Ui.DIM);
+            sbAlarm.setVisibility(View.GONE);
             return;
         }
         Calendar a = Calendar.getInstance();
@@ -391,8 +466,12 @@ public class MainActivity extends Activity {
         else if (diff == 1) day = "zítra";
         else if (diff < 7) day = new SimpleDateFormat("EEEE", CS).format(a.getTime());
         else day = new SimpleDateFormat("d. M.", CS).format(a.getTime());
-        alarm.setText("⏰  " + day + " " + a.get(Calendar.HOUR_OF_DAY) + ":" + two(a.get(Calendar.MINUTE)));
+        String time = a.get(Calendar.HOUR_OF_DAY) + ":" + two(a.get(Calendar.MINUTE));
+        String left = countdown(ai.getTriggerTime() - System.currentTimeMillis());
+        alarm.setText("⏰ " + day + " " + time + " · " + left);
         alarm.setTextColor(Ui.ACCENT);
+        sbAlarm.setText("⏰  " + time + "  ·  " + left);
+        sbAlarm.setVisibility(View.VISIBLE);
     }
 
     private static int dayDiff(Calendar from, Calendar to) {
@@ -623,6 +702,7 @@ public class MainActivity extends Activity {
         bPrev.setVisibility(vis);
         bPlay.setVisibility(vis);
         bNext.setVisibility(vis);
+        sbMedia.setVisibility(vis);
         if (mc == null) {
             if (needMediaPermission) {
                 mTitle.setText("Povol ovládání hudby");
