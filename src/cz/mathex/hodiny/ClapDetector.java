@@ -73,14 +73,15 @@ final class ClapDetector {
                 lastBg = (int) bg;
                 lastPeak = peak;
                 long now = System.currentTimeMillis();
-                boolean loud = peak > 9000 && rms > bg * 5;
+                // citlivější: nižší absolutní práh i poměr k pozadí (v2.9: 9000 a ×5)
+                boolean loud = peak > 5500 && rms > bg * 3.5;
                 if (loud) {
                     loudBlocks++;
                 } else {
-                    // tlesknutí je krátké: nejvýš 2 hlasité bloky (~64 ms); delší zvuk (hudba, řeč) se ignoruje
-                    if (loudBlocks >= 1 && loudBlocks <= 2 && now > cooldownUntil) {
+                    // tlesknutí je krátké: nejvýš 3 hlasité bloky (~96 ms, i s ozvěnou); delší zvuk (hudba, řeč) se ignoruje
+                    if (loudBlocks >= 1 && loudBlocks <= 3 && now > cooldownUntil) {
                         long gap = now - lastClap;
-                        if (gap > 200 && gap < 800) {
+                        if (gap > 150 && gap < 1000) {
                             lastClap = 0;
                             cooldownUntil = now + 1500;
                             main.post(new Runnable() {
