@@ -7,11 +7,10 @@ import android.graphics.RectF;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
-import android.widget.OverScroller;
 
 /**
  * Otočné kolečko čísel (jako výběr času v hodinách od Googlu): táhne se prstem, má setrvačnost,
- * dojede na nejbližší číslo a je dokola (po 59 je 00). Uprostřed velké číslo, okolní menší a slabší.
+ * dojede přesně na číslo a je dokola (po 59 je 00). Uprostřed velké číslo, okolní menší a slabší.
  */
 final class WheelView extends View {
     interface Listener {
@@ -23,7 +22,6 @@ final class WheelView extends View {
     private final int count;
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint band = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final OverScroller scroller;
     private VelocityTracker vt;
     private float rowH = 1;
     private float pos;          // spojitá pozice v řádcích
@@ -37,7 +35,6 @@ final class WheelView extends View {
         this.count = count;
         this.value = initial;
         this.pos = initial;
-        scroller = new OverScroller(c);
         Ui.loadFonts(c);
         text.setTypeface(Ui.display());
         text.setTextAlign(Paint.Align.CENTER);
@@ -55,7 +52,7 @@ final class WheelView extends View {
     }
 
     void setValue(int v) {
-        scroller.forceFinished(true);
+        stopAnim();
         value = wrap(v);
         pos = value;
         invalidate();
@@ -100,60 +97,82 @@ final class WheelView extends View {
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 getParent().requestDisallowInterceptTouchEvent(true);
-                scroller.forceFinished(true);
+                stopAnim();
                 lastY = e.getY();
                 return true;
             case MotionEvent.ACTION_MOVE:
                 pos -= (e.getY() - lastY) / rowH;
                 lastY = e.getY();
+                changed();
                 invalidate();
                 return true;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 vt.computeCurrentVelocity(1000);
-                float vy = vt.getYVelocity();
+                float vRows = -vt.getYVelocity() / rowH; // řádků za sekundu
                 vt.recycle();
                 vt = null;
-                if (Math.abs(vy) > rowH * 2) {
-                    scroller.fling(0, Math.round(pos * rowH), 0, Math.round(-vy), 0, 0,
-                            Integer.MIN_VALUE / 2, Integer.MAX_VALUE / 2);
-                } else {
-                    snap();
-                }
-                invalidate();
+                // setrvačnost: cílové číslo podle rychlosti, pak plynulé dojetí přesně na něj
+                float target = Math.round(pos + (Math.abs(vRows) > 2 ? vRows * .32f : 0));
+                animateTo(target, Math.abs(vRows) > 2 ? 520 : 160);
                 return true;
         }
         return true;
     }
 
-    /** Dojet na nejbližší číslo. */
-    private void snap() {
-        int target = Math.round(pos);
-        int from = Math.round(pos * rowH);
-        scroller.startScroll(0, from, 0, Math.round(target * rowH) - from, 180);
+    private android.animation.ValueAnimator anim;
+
+    /** Dotočit rozjeté kolečko hned na cílové číslo (před uložením). */
+    void finish() {
+        if (anim != null) anim.end();
     }
 
-    @Override
-    public void computeScroll() {
-        if (scroller.computeScrollOffset()) {
-            pos = scroller.getCurrY() / rowH;
-            invalidate();
-            if (scroller.isFinished()) settle();
-        } else if (Math.abs(pos - Math.round(pos)) > 0.001f && vt == null) {
-            snap();
-            invalidate();
-        } else if (vt == null) {
-            settle();
-        }
+    private void stopAnim() {
+        if (anim != null) anim.cancel();
+        anim = null;
     }
 
-    private void settle() {
-        int v = wrap(Math.round(pos));
-        if (Math.abs(pos - Math.round(pos)) > 0.001f) {
-            snap();
+    private void animateTo(final float target, long ms) {
+        stopAnim();
+        final float from = pos;
+        if (Math.abs(target - from) < 0.001f) {
+            pos = target;
+            changed();
             invalidate();
             return;
         }
+        anim = android.animation.ValueAnimator.ofFloat(0f, 1f);
+        anim.setDuration(ms);
+        anim.setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f));
+        anim.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener() {
+            public void onAnimationUpdate(android.animation.ValueAnimator va) {
+                pos = from + (target - from) * (Float) va.getAnimatedValue();
+                changed();
+                invalidate();
+            }
+        });
+        anim.addListener(new android.animation.AnimatorListenerAdapter() {
+            boolean cancelled;
+
+            @Override
+            public void onAnimationCancel(android.animation.Animator a) {
+                cancelled = true;
+            }
+
+            @Override
+            public void onAnimationEnd(android.animation.Animator a) {
+                if (cancelled) return;
+                pos = target;
+                changed();
+                invalidate();
+            }
+        });
+        anim.start();
+    }
+
+    /** Hodnota = číslo, které je právě uprostřed (i během otáčení). */
+    private void changed() {
+        int v = wrap(Math.round(pos));
         if (v != value) {
             value = v;
             if (listener != null) listener.onValue(v);

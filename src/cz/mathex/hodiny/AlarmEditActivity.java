@@ -254,6 +254,8 @@ public class AlarmEditActivity extends BaseActivity {
     }
 
     private Alarms.Alarm current() {
+        hours.finish();
+        minutes.finish();
         Alarms.Alarm a = new Alarms.Alarm();
         a.hour = hours.getValue();
         a.minute = minutes.getValue();
