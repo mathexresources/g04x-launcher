@@ -22,6 +22,7 @@ import java.util.Calendar;
 /** Zvonící budík: velký čas, „Odložit“ a „Vypnout“. Libovolné tlačítko na hodinách = odložit. */
 public class RingActivity extends Activity {
     private static final long AUTO_SNOOZE = 10 * 60 * 1000L;
+    private static final int MAX_AUTO_SNOOZES = 2;
 
     private final Handler h = new Handler(Looper.getMainLooper());
     private MediaPlayer player;
@@ -117,7 +118,7 @@ public class RingActivity extends Activity {
         startSound();
         h.postDelayed(new Runnable() {
             public void run() {
-                snooze(); // nikdo nereaguje → odložit, ať to nezvoní donekonečna
+                autoSnooze();
             }
         }, AUTO_SNOOZE);
     }
@@ -178,8 +179,30 @@ public class RingActivity extends Activity {
         if (audio != null) audio.abandonAudioFocus(focus);
     }
 
+    /**
+     * Nikdo nereaguje (třeba nejsi doma): 2× se budík sám odloží, potřetí to vzdá a ztichne,
+     * ať nezvoní celý víkend a nebudí ostatní.
+     */
+    private void autoSnooze() {
+        if (done) return;
+        int n = Prefs.get(this).getInt("auto_snoozes", 0);
+        if (n >= MAX_AUTO_SNOOZES) {
+            done = true;
+            Prefs.get(this).edit().putInt("auto_snoozes", 0).apply();
+            Alarms.clearSnooze(this);
+            Alarms.schedule(this);
+            finishRing();
+            return;
+        }
+        Prefs.get(this).edit().putInt("auto_snoozes", n + 1).apply();
+        done = true;
+        Alarms.snooze(this, alarmId);
+        finishRing();
+    }
+
     private void snooze() {
         if (done) return;
+        Prefs.get(this).edit().putInt("auto_snoozes", 0).apply(); // odložil člověk → je u budíku
         done = true;
         Alarms.snooze(this, alarmId);
         finishRing();

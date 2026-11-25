@@ -67,6 +67,9 @@ Space Grotesk numerals, system Roboto text (sharper than Inter on the 480p panel
 - **Morning report on alarm dismiss** – each alarm has a *🖨 print morning report* checkbox; tapping *Vypnout* (stop)
   on such an alarm calls the thermoprint API and prints the morning receipt, instead of printing it at a fixed time.
 - **Remote self-update** from GitHub Releases (⚙ Settings → ⟳ Aktualizovat).
+- **Watchdog**: after a crash the launcher logs the error and restarts itself within 2 s; every 30 min (and at
+  start) it re-checks that the next alarm is scheduled. An alarm nobody reacts to auto-snoozes at most twice,
+  then goes quiet – no ringing all weekend when you are away. Status in ⚙ Settings.
 - Keeps the screen on, hides system bars, ignores Back.
 
 ## The hardware
@@ -418,6 +421,8 @@ src/cz/mathex/hodiny/
   ClapDetector.java     double-clap detection from the microphone (loudness only)
   Yeelight.java         Yeelight LAN protocol (SSDP discovery, JSON over TCP 55443)
   LightActivity.java    bulb control screen
+  App.java              watchdog (crash restart, periodic alarm check)
+  BigSlider.java        full-tile slider
   Ui.java               "Ember" colours, fonts, icons, sizes, helpers
 assets/fonts/           Space Grotesk (static Latin-Ext subsets, SIL OFL – licence included)
 res/drawable/           vector icons

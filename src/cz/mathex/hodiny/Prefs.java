@@ -208,7 +208,7 @@ final class Prefs {
             public void run() {
                 if (sens.isAttachedToWindow()) seen[0] = true;
                 else if (seen[0]) return; // dialog zavřený
-                sens.setText(MainActivity.sensorDebug() + "\nsvětlo teď: " + MainActivity.luxNow + " lx");
+                sens.setText(MainActivity.sensorDebug() + "\nsvětlo teď: " + MainActivity.luxNow + " lx\n" + App.status(a));
                 hh.postDelayed(this, 300);
             }
         });
