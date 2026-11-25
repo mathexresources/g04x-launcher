@@ -15,7 +15,7 @@ import android.widget.Toast;
 import java.util.List;
 
 /** Seznam budíků: ťuknutí = upravit, přepínač vpravo = zapnout / vypnout, „+ Nový“ nahoře. */
-public class AlarmsActivity extends Activity {
+public class AlarmsActivity extends BaseActivity {
     private LinearLayout list;
 
     @Override
@@ -47,6 +47,40 @@ public class AlarmsActivity extends Activity {
 
     private void render() {
         list.removeAllViews();
+        renderAlarms();
+        addTestTile();
+    }
+
+    /** „Zkusit za 1 min“: projde celou cestou budíku včetně zvuku – pro klid duše. */
+    private void addTestTile() {
+        LinearLayout t = Ui.box(this, false);
+        t.setGravity(Gravity.CENTER_VERTICAL);
+        t.setBackground(Ui.tile(this, Ui.TILE, .04f));
+        int p = Ui.px(this, .04f);
+        t.setPadding(p, p * 2 / 3, p, p * 2 / 3);
+        t.addView(Ui.icon(this, R.drawable.ic_alarm, Ui.TEAL, .05f));
+        LinearLayout tx = Ui.box(this, true);
+        TextView n = Ui.text(this, "Zkušební budík za 1 minutu", .042f, Ui.INK);
+        n.setTypeface(Ui.medium());
+        tx.addView(n);
+        tx.addView(Ui.text(this, "ověří plánování, zvuk i obrazovku budíku", .032f, Ui.DIM), Ui.top(this, .008f));
+        LinearLayout.LayoutParams tl = Ui.lp(0, -2, 1f);
+        tl.leftMargin = Ui.px(this, .03f);
+        t.addView(tx, tl);
+        t.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                long at = Alarms.test(AlarmsActivity.this, 60);
+                Toast.makeText(AlarmsActivity.this, "Zkušební budík zazvoní v " + fmt(at) + " – můžeš jít na plochu",
+                        Toast.LENGTH_LONG).show();
+                render();
+            }
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = Ui.px(this, .045f);
+        list.addView(t, lp);
+    }
+
+    private void renderAlarms() {
         List<Alarms.Alarm> alarms = Alarms.load(this);
         if (alarms.isEmpty()) {
             TextView t = Ui.text(this, "Zatím žádný budík.\nPřidej ho tlačítkem „+ Nový“ vpravo nahoře.", .05f, Ui.DIM);
@@ -137,136 +171,10 @@ public class AlarmsActivity extends Activity {
         Toast.makeText(this, "Budík zazvoní za " + s, Toast.LENGTH_SHORT).show();
     }
 
-    /** Dialog pro nový (a == null) nebo existující budík. */
+    /** Nový (a == null) nebo existující budík – vlastní obrazovka s kolečky. */
     private void edit(final Alarms.Alarm existing) {
-        int pad = Ui.px(this, .04f);
-        LinearLayout box = Ui.box(this, true);
-        box.setPadding(pad, pad / 2, pad, 0);
-        box.setGravity(Gravity.CENTER_HORIZONTAL);
-
-        LinearLayout pick = Ui.box(this, false);
-        pick.setGravity(Gravity.CENTER);
-        final NumberPicker hp = picker(23);
-        final NumberPicker mp = picker(59);
-        android.content.SharedPreferences last = Prefs.get(this);
-        hp.setValue(existing != null ? existing.hour : last.getInt("last_h", 7));
-        mp.setValue(existing != null ? existing.minute : last.getInt("last_m", 0));
-        pick.addView(hp);
-        TextView colon = Ui.text(this, ":", .09f, Ui.INK);
-        colon.setPadding(pad / 2, 0, pad / 2, 0);
-        pick.addView(colon);
-        pick.addView(mp);
-        box.addView(pick);
-
-        final int[] days = {existing != null ? existing.days : 0};
-
-        // kdy zazvoní – aktualizuje se při otáčení koleček
-        final TextView when = Ui.text(this, "", .045f, Ui.AMBER);
-        box.addView(when, Ui.top(this, .02f));
-
-        final LinearLayout dayRow = Ui.box(this, false);
-        dayRow.setGravity(Gravity.CENTER);
-        final TextView[] dayViews = new TextView[7];
-        final Runnable refresh = new Runnable() {
-            public void run() {
-                Alarms.Alarm tmp = new Alarms.Alarm();
-                tmp.hour = hp.getValue();
-                tmp.minute = mp.getValue();
-                tmp.days = days[0];
-                when.setText("zazvoní " + whenText(Alarms.nextTrigger(tmp, System.currentTimeMillis()))
-                        + (days[0] == 0 ? " (jednou)" : " · " + tmp.daysText()));
-                styleDays(dayViews, days[0]);
-            }
-        };
-        for (int i = 0; i < 7; i++) {
-            final int bit = 1 << i;
-            final TextView d = Ui.text(this, Alarms.DAY_NAMES[i], .045f, Ui.INK);
-            d.setGravity(Gravity.CENTER);
-            d.setOnClickListener(new View.OnClickListener() {
-                public void onClick(View v) {
-                    days[0] ^= bit;
-                    refresh.run();
-                }
-            });
-            dayViews[i] = d;
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.px(this, .11f), Ui.px(this, .09f));
-            lp.leftMargin = lp.rightMargin = Ui.px(this, .008f);
-            dayRow.addView(d, lp);
-        }
-        NumberPicker.OnValueChangeListener ch = new NumberPicker.OnValueChangeListener() {
-            public void onValueChange(NumberPicker p, int o, int n) {
-                refresh.run();
-            }
-        };
-        hp.setOnValueChangedListener(ch);
-        mp.setOnValueChangedListener(ch);
-
-        // opakování je schované – výchozí je jednorázový budík na nejbližší čas
-        final TextView repeat = Ui.text(this, "↻  Opakovat ve dny…", .045f, Ui.DIM);
-        repeat.setPadding(pad, pad / 2, pad, pad / 2);
-        repeat.setBackground(Ui.press(this));
-        box.addView(repeat, Ui.top(this, .015f));
-        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-2, -2);
-        dl.topMargin = pad / 3;
-        box.addView(dayRow, dl);
-        dayRow.setVisibility(days[0] != 0 ? View.VISIBLE : View.GONE);
-        repeat.setVisibility(days[0] != 0 ? View.GONE : View.VISIBLE);
-        repeat.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                repeat.setVisibility(View.GONE);
-                dayRow.setVisibility(View.VISIBLE);
-            }
-        });
-        refresh.run();
-
-        final android.widget.CheckBox print = new android.widget.CheckBox(this);
-        print.setText("🖨  Po vypnutí vytisknout ranní zprávu");
-        print.setTextColor(Ui.INK);
-        print.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, Ui.base(this) * .045f);
-        print.setChecked(existing != null ? existing.print : Prefs.get(this).getBoolean("last_print", true));
-        box.addView(print, Ui.top(this, .02f));
-
-        ScrollView sv = new ScrollView(this);
-        sv.addView(box);
-
-        AlertDialog.Builder bd = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setView(sv)
-                .setNegativeButton("Zrušit", null)
-                .setPositiveButton("Uložit", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface di, int w) {
-                        List<Alarms.Alarm> all = Alarms.load(AlarmsActivity.this);
-                        Alarms.Alarm a = existing != null ? Alarms.find(all, existing.id) : null;
-                        if (a == null) {
-                            a = new Alarms.Alarm();
-                            a.id = Alarms.newId(AlarmsActivity.this);
-                            all.add(a);
-                        }
-                        a.hour = hp.getValue();
-                        a.minute = mp.getValue();
-                        a.days = days[0];
-                        a.on = true;
-                        a.print = print.isChecked();
-                        Prefs.get(AlarmsActivity.this).edit().putInt("last_h", a.hour).putInt("last_m", a.minute)
-                                .putBoolean("last_print", a.print).apply();
-                        Alarms.save(AlarmsActivity.this, all);
-                        toastNext(a);
-                        render();
-                    }
-                });
-        if (existing != null) {
-            bd.setNeutralButton("Smazat", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface di, int w) {
-                    List<Alarms.Alarm> all = Alarms.load(AlarmsActivity.this);
-                    Alarms.Alarm a = Alarms.find(all, existing.id);
-                    if (a != null) all.remove(a);
-                    Alarms.save(AlarmsActivity.this, all);
-                    render();
-                }
-            });
-        }
-        AlertDialog dlg = bd.create();
-        dlg.show();
-        Ui.immersive(this);
+        startActivity(new android.content.Intent(this, AlarmEditActivity.class)
+                .putExtra("id", existing != null ? existing.id : -1));
     }
 
     private NumberPicker picker(int max) {

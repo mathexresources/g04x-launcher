@@ -564,7 +564,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent i) {
         super.onNewIntent(i);
-        setStandby(false); // tlačítko Domů
+        // z vedlejší obrazovky po 30 s nečinnosti rovnou do standby, jinak tlačítko Domů = plocha
+        setStandby(i != null && i.getBooleanExtra("standby", false));
     }
 
     @Override
@@ -779,6 +780,14 @@ public class MainActivity extends Activity {
     private void updateAlarm() {
         AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
         AlarmManager.AlarmClockInfo ai = am.getNextAlarmClock();
+        if (ai == null && Alarms.expectedNext(this) > 0) {
+            // budík je zapnutý, ale systém ho nemá → hned znovu naplánovat a ukázat varování
+            Alarms.schedule(this);
+            alarmTime.setText("⚠ budík nenaplánován – opravuji");
+            alarmTime.setTextColor(Ui.BAD);
+            alarmLeft.setText("");
+            return;
+        }
         if (ai == null) {
             alarmTime.setText("žádný budík");
             alarmLeft.setText("");
@@ -799,7 +808,10 @@ public class MainActivity extends Activity {
         else day = new SimpleDateFormat("d. M.", CS).format(a.getTime());
         String time = a.get(Calendar.HOUR_OF_DAY) + ":" + two(a.get(Calendar.MINUTE));
         String left = "· " + countdown(ai.getTriggerTime() - System.currentTimeMillis());
-        alarmTime.setText(day + " " + time);
+        // ověření: systém má zvonění opravdu naplánované na čas, který čekáme?
+        long expected = Alarms.expectedNext(this);
+        boolean confirmed = expected > 0 && Math.abs(ai.getTriggerTime() - expected) < 60000;
+        alarmTime.setText(day + " " + time + (confirmed ? " ✓" : ""));
         alarmTime.setTextColor(Ui.AMBER);
         alarmLeft.setText(left);
         alarmPill.setBackground(Ui.tile(this, Ui.AMBER_BG, .033f));
@@ -970,13 +982,7 @@ public class MainActivity extends Activity {
     }
 
     private void openSettings() {
-        Prefs.showSettings(this, new Runnable() {
-            public void run() {
-                loadWeather();
-                loadToday(true);
-                startClap();
-            }
-        });
+        startActivity(new Intent(this, SettingsActivity.class));
     }
 
     // ================================================================== hudba

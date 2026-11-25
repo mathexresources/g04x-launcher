@@ -36,7 +36,12 @@ public class AlarmReceiver extends BroadcastReceiver {
             Alarms.save(c, list); // zároveň naplánuje další
         }
         Alarms.schedule(c);
-        c.startActivity(new Intent(c, RingActivity.class).putExtra("alarm_id", id)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NO_USER_ACTION));
+        RingService.start(c, id); // zvuk – nezávisle na obrazovce
+        try {
+            c.startActivity(new Intent(c, RingActivity.class).putExtra("alarm_id", id)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NO_USER_ACTION));
+        } catch (Exception ignored) {
+            // obrazovku jde otevřít i z oznámení; zvoní se tak jako tak
+        }
     }
 }

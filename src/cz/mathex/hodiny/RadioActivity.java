@@ -26,7 +26,7 @@ import java.net.URLEncoder;
  * Internetová rádia z radio-browser.info: ★ oblíbené jako velké dlaždice (ťuknout = hrát, podržet = odebrat),
  * pod nimi nejposlouchanější české stanice a hledání.
  */
-public class RadioActivity extends Activity {
+public class RadioActivity extends BaseActivity {
     private static final String[] SERVERS = {"de1", "nl1", "at1", "de2", "fi1"};
 
     private final Handler h = new Handler(Looper.getMainLooper());

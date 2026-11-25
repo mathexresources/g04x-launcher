@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.Locale;
 
 /** Seznam všech aplikací. Ťuknutí = spustit, podržení = informace o aplikaci. */
-public class AppsActivity extends Activity {
+public class AppsActivity extends BaseActivity {
     static final class App {
         String label, pkg, cls;
         Drawable icon;
@@ -42,7 +42,7 @@ public class AppsActivity extends Activity {
         root.setBackgroundColor(Ui.BG);
         root.addView(Ui.bar(this, "Aplikace", "⚙  Nastavení", new View.OnClickListener() {
             public void onClick(View v) {
-                Prefs.showSettings(AppsActivity.this, null);
+                startActivity(new Intent(AppsActivity.this, SettingsActivity.class));
             }
         }));
 

@@ -1,15 +1,7 @@
 package cz.mathex.hodiny;
 
 import android.app.Activity;
-import android.content.Context;
-import android.media.AudioAttributes;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
-import android.media.RingtoneManager;
-import android.net.Uri;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -19,26 +11,20 @@ import android.widget.TextView;
 
 import java.util.Calendar;
 
-/** Zvonící budík: velký čas, „Odložit“ a „Vypnout“. Libovolné tlačítko na hodinách = odložit. */
+/**
+ * Obrazovka zvonícího budíku – jen ovládání. Zvuk hraje RingService (i kdyby se tahle obrazovka
+ * neotevřela). Libovolné tlačítko na hodinách = odložit.
+ */
 public class RingActivity extends Activity {
-    private static final long AUTO_SNOOZE = 10 * 60 * 1000L;
-    private static final int MAX_AUTO_SNOOZES = 2;
-
-    private final Handler h = new Handler(Looper.getMainLooper());
-    private MediaPlayer player;
-    private AudioManager audio;
-    private boolean done;
     private int alarmId;
-
-    private final AudioManager.OnAudioFocusChangeListener focus = new AudioManager.OnAudioFocusChangeListener() {
-        public void onAudioFocusChange(int change) {
-        }
-    };
+    private boolean sent;
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
-        alarmId = getIntent().getIntExtra("alarm_id", 0);
+        alarmId = getIntent().getIntExtra("alarm_id", RingService.alarmId);
+        RingService.ui = new java.lang.ref.WeakReference<Activity>(this);
+
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                 | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
                 | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
@@ -115,113 +101,39 @@ public class RingActivity extends Activity {
         buttons.addView(stop, sl);
 
         setContentView(root);
-        startSound();
-        h.postDelayed(new Runnable() {
-            public void run() {
-                autoSnooze();
-            }
-        }, AUTO_SNOOZE);
     }
+
+    private final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
 
     @Override
     protected void onResume() {
         super.onResume();
         Ui.immersive(this);
-    }
-
-    private void startSound() {
-        audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        audio.requestAudioFocus(focus, AudioManager.STREAM_ALARM, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
-        int max = audio.getStreamMaxVolume(AudioManager.STREAM_ALARM);
-        if (audio.getStreamVolume(AudioManager.STREAM_ALARM) < max / 2) {
-            audio.setStreamVolume(AudioManager.STREAM_ALARM, Math.max(1, (int) (max * 0.7)), 0);
-        }
-        Uri[] candidates = {
-                RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM),
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
-        };
-        for (Uri u : candidates) {
-            if (u == null) continue;
-            try {
-                MediaPlayer p = new MediaPlayer();
-                p.setAudioAttributes(new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build());
-                p.setDataSource(this, u);
-                p.setLooping(true);
-                p.prepare();
-                p.start();
-                player = p;
-                return;
-            } catch (Exception ignored) {
+        // služba se spouští asynchronně → chvíli počkat, než ověříme, že budík pořád zvoní
+        h.postDelayed(new Runnable() {
+            public void run() {
+                if (!RingService.ringing && !isFinishing()) finish();
             }
-        }
-        // žádný zvuk nenalezen – aspoň tónem
-        try {
-            android.media.ToneGenerator tg = new android.media.ToneGenerator(AudioManager.STREAM_ALARM, 100);
-            tg.startTone(android.media.ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, (int) AUTO_SNOOZE);
-        } catch (Exception ignored) {
-        }
+        }, 3000);
     }
 
-    private void stopSound() {
-        if (player != null) {
-            try {
-                player.stop();
-            } catch (Exception ignored) {
-            }
-            player.release();
-            player = null;
-        }
-        if (audio != null) audio.abandonAudioFocus(focus);
-    }
-
-    /**
-     * Nikdo nereaguje (třeba nejsi doma): 2× se budík sám odloží, potřetí to vzdá a ztichne,
-     * ať nezvoní celý víkend a nebudí ostatní.
-     */
-    private void autoSnooze() {
-        if (done) return;
-        int n = Prefs.get(this).getInt("auto_snoozes", 0);
-        if (n >= MAX_AUTO_SNOOZES) {
-            done = true;
-            Prefs.get(this).edit().putInt("auto_snoozes", 0).apply();
-            Alarms.clearSnooze(this);
-            Alarms.schedule(this);
-            finishRing();
-            return;
-        }
-        Prefs.get(this).edit().putInt("auto_snoozes", n + 1).apply();
-        done = true;
-        Alarms.snooze(this, alarmId);
-        finishRing();
+    @Override
+    protected void onPause() {
+        super.onPause();
+        h.removeCallbacksAndMessages(null);
     }
 
     private void snooze() {
-        if (done) return;
-        Prefs.get(this).edit().putInt("auto_snoozes", 0).apply(); // odložil člověk → je u budíku
-        done = true;
-        Alarms.snooze(this, alarmId);
-        finishRing();
+        if (sent) return;
+        sent = true;
+        RingService.send(this, RingService.SNOOZE);
+        finish();
     }
 
     private void dismiss() {
-        if (done) return;
-        done = true;
-        Alarms.clearSnooze(this);
-        Alarms.schedule(this);
-        Alarms.Alarm a = Alarms.find(Alarms.load(this), alarmId);
-        if (a != null && a.print) Prefs.printMorning(this, true); // výsledek ukáže toast
-        if (Yeelight.configured(this) && Prefs.get(this).getBoolean("bulb_full_on_dismiss", true)) Yeelight.full(this);
-        finishRing();
-    }
-
-    private void finishRing() {
-        h.removeCallbacksAndMessages(null);
-        stopSound();
+        if (sent) return;
+        sent = true;
+        RingService.send(this, RingService.DISMISS);
         finish();
     }
 
@@ -234,11 +146,5 @@ public class RingActivity extends Activity {
     @Override
     public void onBackPressed() {
         snooze();
-    }
-
-    @Override
-    protected void onDestroy() {
-        stopSound();
-        super.onDestroy();
     }
 }

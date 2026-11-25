@@ -15,7 +15,7 @@ import android.widget.Toast;
 import org.json.JSONArray;
 
 /** Ovládání žárovky Yeelight / Mi LED: vypínač, jas, teplota bílé, barvy, svítání před budíkem. */
-public class LightActivity extends Activity {
+public class LightActivity extends BaseActivity {
     /** Výchozí předvolby: název, teplota bílé (K), jas (%). Podržením se přepíšou aktuálním stavem. */
     private static final String[] PRESET_NAMES = {"Bílá max", "Halogen", "Noční"};
     private static final int[][] PRESET_DEFAULTS = {{5500, 100}, {2700, 60}, {1800, 5}};

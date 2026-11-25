@@ -140,6 +140,26 @@ final class Alarms {
         sp(c).edit().remove("snooze").apply();
     }
 
+    /** Čas, na který by měl být naplánovaný nejbližší budík (nebo odložení); -1 = žádný. */
+    static long expectedNext(Context c) {
+        long now = System.currentTimeMillis(), best = -1;
+        for (Alarm a : load(c)) {
+            long t = nextTrigger(a, now);
+            if (t > 0 && (best < 0 || t < best)) best = t;
+        }
+        long sn = snoozeAt(c);
+        if (sn > now && (best < 0 || sn < best)) best = sn;
+        return best;
+    }
+
+    /** Zkušební budík: projde celou cestou (plánování, služba, zvuk, obrazovka) za `seconds` s. */
+    static long test(Context c, int seconds) {
+        long at = System.currentTimeMillis() + seconds * 1000L;
+        sp(c).edit().putLong("snooze", at).putInt("snooze_of", 0).apply();
+        schedule(c);
+        return at;
+    }
+
     /** Naplánuje nejbližší budík (nebo odložení). Volat po každé změně, po startu a po změně času. */
     static void schedule(Context c) {
         long now = System.currentTimeMillis();

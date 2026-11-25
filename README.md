@@ -35,7 +35,13 @@ Space Grotesk numerals, system Roboto text (sharper than Inter on the 480p panel
 
 - **Home screen** (landscape 800×480): large clock, date, name day / birthdays, next alarm with countdown, weather,
   now-playing card, five icon tiles (alarms · Spotify · radio · printer · all apps).
-- **Own alarm clock** – the system clock app on the GSI just flashed a black screen, so the launcher has its own:
+- **Own alarm clock** – the system clock app on the GSI just flashed a black screen, so the launcher has its own.
+  Editing in two steps: time on swipeable hour/minute wheels (like Google's clock), then once / repeat days and
+  morning print. Ringing runs in a foreground service, so the sound plays even if the alarm screen fails to open
+  (stop/snooze also from the notification or any hardware button). The alarm line shows ✓ when Android confirms
+  the alarm is scheduled for that exact time, ⚠ (and an immediate fix) when it isn't. "Test alarm in 1 minute"
+  in the alarm list walks the whole path.
+  Features:
   one-off by default ("ring at the next 6:30"), optional repeat days, snooze 9 min, any hardware button = snooze,
   auto-snooze after 10 min, survives reboots. Ducks Spotify while ringing.
 - **Standby** after 15 s without touch. Nothing playing: date, huge time and the alarm (with countdown).
@@ -70,6 +76,8 @@ Space Grotesk numerals, system Roboto text (sharper than Inter on the 480p panel
 - **Watchdog**: after a crash the launcher logs the error and restarts itself within 2 s; every 30 min (and at
   start) it re-checks that the next alarm is scheduled. An alarm nobody reacts to auto-snoozes at most twice,
   then goes quiet – no ringing all weekend when you are away. Status in ⚙ Settings.
+- **Settings** on a full screen: sections on the left (weather, printer, light, microphone, system), saved instantly.
+- Secondary screens (alarms, radio, light, printer, settings…) return to the home screen in standby after 30 s idle.
 - Keeps the screen on, hides system bars, ignores Back.
 
 ## The hardware
@@ -409,7 +417,10 @@ src/cz/mathex/hodiny/
   Alarms.java           alarm storage (JSON in SharedPreferences) + scheduling via setAlarmClock
   AlarmsActivity.java   alarm list + edit dialog
   AlarmReceiver.java    fires the alarm, reschedules after boot / time change / update
-  RingActivity.java     ringing screen (snooze / stop), morning print trigger
+  RingService.java      ringing (foreground service): sound, auto-snooze, stop → morning print + light
+  RingActivity.java     ringing screen (snooze / stop buttons only)
+  AlarmEditActivity.java  two-step alarm editor; WheelView.java = swipeable number wheel
+  SettingsActivity.java full-screen settings; BaseActivity.java = idle → standby
   PrinterActivity.java  native printer control panel (thermoprint API)
   RadioActivity.java    station list (radio-browser.info), search, favourites
   RadioService.java     radio playback + MediaSession (foreground service)

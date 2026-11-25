@@ -20,7 +20,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /** Nativní ovládání termotiskárny přes API thermoprint-serveru (Bearer token z nastavení). */
-public class PrinterActivity extends Activity {
+public class PrinterActivity extends BaseActivity {
     private static final String[][] BUTTONS = {
             {"morning", "☀️", "Ranní zpráva"}, {"todo", "✅", "Todo"}, {"shopping", "🛒", "Nákup"},
             {"status", "🌐", "Stav webů"}, {"moodle", "🎓", "Moodle"}, {"planes", "✈️", "Letadla"},
