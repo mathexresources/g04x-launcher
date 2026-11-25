@@ -45,6 +45,9 @@ Space Grotesk numerals, system Roboto text (sharper than Inter on the 480p panel
   one-off by default ("ring at the next 6:30"), optional repeat days, snooze 9 min, any hardware button = snooze,
   auto-snooze after 10 min, survives reboots. Ducks Spotify while ringing.
 - **Standby** after 15 s without touch. Nothing playing: date, huge time and the alarm (with countdown).
+  Six looks to pick from in Settings → Standby (live previews): *Classic*, *Hands* (analog with a seconds hand),
+  *Flip* (animated flip cards), *Words* (Czech "skoro čtvrt na jedenáct"), *Sun* (sun / moon travelling over the
+  horizon, sunrise & sunset times) and *Dots* (LED matrix with a seconds row) – or a different one every day.
   Something playing: the music becomes the main element – big cover art (Spotify album art, radio station logo),
   title, artist and large ⏮ ⏯ ⏭ that work without waking the screen; time, date and alarm move to a small line on top.
   Any touch outside the controls wakes it (the first touch never launches anything).
@@ -420,6 +423,7 @@ src/cz/mathex/hodiny/
   RingService.java      ringing (foreground service): sound, auto-snooze, stop → morning print + light
   RingActivity.java     ringing screen (snooze / stop buttons only)
   AlarmEditActivity.java  two-step alarm editor; WheelView.java = swipeable number wheel
+  StandbyFace.java      the standby looks (all drawn on a Canvas, also used as previews)
   SettingsActivity.java full-screen settings; BaseActivity.java = idle → standby
   PrinterActivity.java  native printer control panel (thermoprint API)
   RadioActivity.java    station list (radio-browser.info), search, favourites

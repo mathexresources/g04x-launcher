@@ -65,6 +65,7 @@ public class MainActivity extends Activity {
 
     // standby
     private FrameLayout standby;
+    private StandbyFace sbFace;
     private LinearLayout sbCenter, sbMedia, sbAlarm, sbPrev, sbPlay, sbNext;
     private TextView sbDate, sbClock, sbAlarmTime, sbAlarmLeft, sbTitle, sbSub, sbHint;
     private ImageView sbAlarmIcon, sbMediaIcon, sbArtImg, mArtImg;
@@ -404,6 +405,10 @@ public class MainActivity extends Activity {
         sbCenter.addView(sbAlarm, Ui.top(this, .045f));
         FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(-1, -1);
         standby.addView(sbCenter, cp);
+        sbCenter.setVisibility(View.GONE); // nahrazeno vzhledy v StandbyFace (původní = „Klasický“)
+        sbFace = new StandbyFace(this);
+        sbFace.setStyle(StandbyFace.resolve(this));
+        standby.addView(sbFace, new FrameLayout.LayoutParams(-1, -1));
 
         // když něco hraje: hlavní prvek je přehrávání (obrázek + název + velká tlačítka), čas a budík malé nahoře
         sbMedia = Ui.box(this, false);
@@ -665,8 +670,8 @@ public class MainActivity extends Activity {
     private void shiftStandby() {
         Random r = new Random();
         int max = px(.035f);
-        sbCenter.setTranslationX(r.nextInt(2 * max + 1) - max);
-        sbCenter.setTranslationY(r.nextInt(2 * max + 1) - max);
+        sbFace.setTranslationX(r.nextInt(2 * max + 1) - max);
+        sbFace.setTranslationY(r.nextInt(2 * max + 1) - max);
         int m = px(.015f);
         sbMedia.setTranslationX(r.nextInt(2 * m + 1) - m);
         sbMedia.setTranslationY(r.nextInt(2 * m + 1) - m);
@@ -675,6 +680,7 @@ public class MainActivity extends Activity {
     /** Standby má vždy stejný vzhled (červený noční režim byl na přání vypnut). */
     private void styleStandby() {
         standby.setBackgroundColor(Ui.BG_STANDBY);
+        sbFace.setStyle(StandbyFace.resolve(this)); // změna v nastavení / „každý den jiný“
         applyBrightness();
     }
 
@@ -796,6 +802,7 @@ public class MainActivity extends Activity {
             Ui.tint((ImageView) alarmPill.getChildAt(0), Ui.DIM);
             sbAlarm.setVisibility(View.GONE);
             sbSmallAlarm.setVisibility(View.GONE);
+            sbFace.setAlarm(null, null);
             return;
         }
         Calendar a = Calendar.getInstance();
@@ -819,6 +826,7 @@ public class MainActivity extends Activity {
         sbAlarmTime.setText(time);
         sbAlarmLeft.setText(left);
         sbAlarm.setVisibility(View.VISIBLE);
+        sbFace.setAlarm(time, left);
         sbSmallAlarm.setText("⏰ " + time + " " + left);
         sbSmallAlarm.setVisibility(View.VISIBLE);
     }
@@ -1066,7 +1074,7 @@ public class MainActivity extends Activity {
         }
         dock.setLayoutParams(dl);
         // standby: když něco hraje, je hlavní prvek přehrávání; jinak velký čas uprostřed
-        sbCenter.setVisibility(mc != null ? View.GONE : View.VISIBLE);
+        sbFace.setVisibility(mc != null ? View.GONE : View.VISIBLE);
         sbClock.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, Ui.base(this) * .58f);
         if (mc == null) {
             showArt(null);

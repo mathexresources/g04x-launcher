@@ -22,8 +22,8 @@ import org.json.JSONArray;
  * Nastavení na celou obrazovku: vlevo sekce, vpravo jejich obsah. Ukládá se hned (bez tlačítka Uložit).
  */
 public class SettingsActivity extends BaseActivity {
-    private static final String[] SECTIONS = {"Počasí", "Tiskárna", "Světlo", "Mikrofon", "Systém"};
-    private static final int[] ICONS = {R.drawable.w_partly, R.drawable.ic_printer, R.drawable.ic_bulb,
+    private static final String[] SECTIONS = {"Standby", "Počasí", "Tiskárna", "Světlo", "Mikrofon", "Systém"};
+    private static final int[] ICONS = {R.drawable.w_moon, R.drawable.w_partly, R.drawable.ic_printer, R.drawable.ic_bulb,
             R.drawable.ic_music, R.drawable.ic_settings};
 
     private final Handler h = new Handler(Looper.getMainLooper());
@@ -95,16 +95,17 @@ public class SettingsActivity extends BaseActivity {
                     render();
                 }
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, px(.12f));
-            if (i > 0) lp.topMargin = px(.01f);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, px(.105f));
+            if (i > 0) lp.topMargin = px(.008f);
             nav.addView(item, lp);
         }
         content.removeAllViews();
         switch (section) {
-            case 0: weather(); break;
-            case 1: printer(); break;
-            case 2: light(); break;
-            case 3: mic(); break;
+            case 0: standby(); break;
+            case 1: weather(); break;
+            case 2: printer(); break;
+            case 3: light(); break;
+            case 4: mic(); break;
             default: system(); break;
         }
     }
@@ -239,6 +240,72 @@ public class SettingsActivity extends BaseActivity {
     }
 
     // ------------------------------------------------------------------ sekce
+    // ------------------------------------------------------------------ standby
+    private void standby() {
+        heading("Vzhled standby");
+        final boolean random = Prefs.get(this).getBoolean("standby_random", false);
+        final int sel = Prefs.get(this).getInt("standby_style", StandbyFace.CLASSIC);
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        int sw = Math.max(dm.widthPixels, dm.heightPixels), sh = Math.min(dm.widthPixels, dm.heightPixels);
+        int gap = px(.025f);
+        int tileW = (sw - 2 * px(.0625f) - px(.46f) - px(.045f) - gap) / 2;
+        int prevH = tileW * sh / sw;
+        LinearLayout row = null;
+        for (int i = 0; i < StandbyFace.COUNT; i++) {
+            final int idx = i;
+            if (i % 2 == 0) {
+                row = Ui.box(this, false);
+                LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
+                rl.topMargin = px(i == 0 ? .01f : .025f);
+                content.addView(row, rl);
+            }
+            boolean on = !random && i == sel;
+            LinearLayout tile = Ui.box(this, true);
+            android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setColor(Ui.BG_STANDBY);
+            bg.setCornerRadius(px(.03f));
+            bg.setStroke(Math.max(2, px(on ? .008f : .003f)), on ? Ui.AMBER : Ui.LINE);
+            frame.setBackground(bg);
+            frame.setClipToOutline(true);
+            int pad = px(.008f);
+            frame.setPadding(pad, pad, pad, pad);
+            StandbyFace face = new StandbyFace(this);
+            face.setStyle(i);
+            face.setAlarm("6:30", "· za 7 h");
+            frame.addView(face, new android.widget.FrameLayout.LayoutParams(-1, -1));
+            tile.addView(frame, new LinearLayout.LayoutParams(tileW, prevH));
+            TextView name = Ui.text(this, StandbyFace.NAMES[i], .036f, on ? Ui.AMBER : Ui.SOFT);
+            if (on) name.setTypeface(Ui.medium());
+            name.setPadding(px(.01f), px(.012f), 0, 0);
+            tile.addView(name);
+            tile.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    Prefs.get(SettingsActivity.this).edit().putInt("standby_style", idx)
+                            .putBoolean("standby_random", false).apply();
+                    render();
+                }
+            });
+            LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(tileW, -2);
+            if (i % 2 == 1) tl.leftMargin = gap;
+            row.addView(tile, tl);
+        }
+        toggle("Každý den jiný vzhled", "standby_random", false, new Runnable() {
+            public void run() {
+                render();
+            }
+        });
+        action("Ukázat standby teď", Ui.AMBER, new Runnable() {
+            public void run() {
+                startActivity(new Intent(SettingsActivity.this, MainActivity.class)
+                        .putExtra("standby", true)
+                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+                finish();
+            }
+        });
+        note("Když něco hraje, standby místo hodin ukazuje přehrávač (obal, název, ovládání).");
+    }
+
     private void weather() {
         heading("Počasí");
         field("Místo", Prefs.weatherName(this), "Praha", InputType.TYPE_CLASS_TEXT, new Saver() {
