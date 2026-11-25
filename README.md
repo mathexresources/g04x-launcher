@@ -85,6 +85,12 @@ Space Grotesk numerals, system Roboto text (sharper than Inter on the 480p panel
 - **Watchdog**: after a crash the launcher logs the error and restarts itself within 2 s; every 30 min (and at
   start) it re-checks that the next alarm is scheduled. An alarm nobody reacts to auto-snoozes at most twice,
   then goes quiet – no ringing all weekend when you are away. Status in ⚙ Settings.
+- **Look & feel** (Settings → Vzhled): five colour palettes for the whole app (Ember, Forest, Ocean, Neon, Mono),
+  ★ favourite standby looks rotating daily or hourly, standby colours following the smart bulb, the music standby
+  tinted by the album cover, a subtle home-screen background pattern, soft generated UI sounds (quiet at night).
+  Standby fades in/out, rings ripple across it on the full hour, the Eyes react to a wave, a clap or a touch, and
+  the ringing screen pulses. **Long-press on standby** opens a quick menu: next look, light, alarm in 8 h, radio.
+- **Radio after the alarm**: Settings → Budík → pick a ★ favourite station that starts when you press Stop.
 - **Settings** on a full screen: sections on the left (weather, printer, light, microphone, system), saved instantly.
 - Secondary screens (alarms, radio, light, printer, settings…) return to the home screen in standby after 30 s idle.
 - Keeps the screen on, hides system bars, ignores Back.

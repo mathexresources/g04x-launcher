@@ -22,12 +22,14 @@ import org.json.JSONArray;
  * Nastavení na celou obrazovku: vlevo sekce, vpravo jejich obsah. Ukládá se hned (bez tlačítka Uložit).
  */
 public class SettingsActivity extends BaseActivity {
-    private static final String[] SECTIONS = {"Standby", "Počasí", "Tiskárna", "Světlo", "Mikrofon", "Systém"};
-    private static final int[] ICONS = {R.drawable.w_moon, R.drawable.w_partly, R.drawable.ic_printer, R.drawable.ic_bulb,
+    private static final String[] SECTIONS = {"Vzhled", "Budík", "Počasí", "Tiskárna", "Světlo", "Mikrofon", "Systém"};
+    private static final int[] ICONS = {R.drawable.w_moon, R.drawable.ic_alarm, R.drawable.w_partly, R.drawable.ic_printer, R.drawable.ic_bulb,
             R.drawable.ic_music, R.drawable.ic_settings};
 
     private final Handler h = new Handler(Looper.getMainLooper());
     private LinearLayout nav, content;
+    private ScrollView sv;
+    private int renderedSection = -1;
     private int section;
     private TextView live; // živé hodnoty (mikrofon, senzory)
 
@@ -50,7 +52,7 @@ public class SettingsActivity extends BaseActivity {
         nav = Ui.box(this, true);
         panes.addView(nav, new LinearLayout.LayoutParams(px(.46f), -1));
 
-        ScrollView sv = new ScrollView(this);
+        sv = new ScrollView(this);
         sv.setVerticalScrollBarEnabled(false);
         content = Ui.box(this, true);
         sv.addView(content);
@@ -95,17 +97,25 @@ public class SettingsActivity extends BaseActivity {
                     render();
                 }
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, px(.105f));
-            if (i > 0) lp.topMargin = px(.008f);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, px(.094f));
+            if (i > 0) lp.topMargin = px(.006f);
             nav.addView(item, lp);
         }
+        final int keepY = section == renderedSection ? sv.getScrollY() : 0;
+        renderedSection = section;
         content.removeAllViews();
+        sv.post(new Runnable() {
+            public void run() {
+                sv.scrollTo(0, keepY);
+            }
+        });
         switch (section) {
             case 0: standby(); break;
-            case 1: weather(); break;
-            case 2: printer(); break;
-            case 3: light(); break;
-            case 4: mic(); break;
+            case 1: alarm(); break;
+            case 2: weather(); break;
+            case 3: printer(); break;
+            case 4: light(); break;
+            case 5: mic(); break;
             default: system(); break;
         }
     }
@@ -240,11 +250,60 @@ public class SettingsActivity extends BaseActivity {
     }
 
     // ------------------------------------------------------------------ sekce
-    // ------------------------------------------------------------------ standby
+    // ------------------------------------------------------------------ vzhled
+    interface Pick {
+        void pick(int i);
+    }
+
+    /** Řada „pilulek“ s jednou vybranou volbou (zalomí se po 3). */
+    private void choices(String[] names, int sel, final Pick pick) {
+        LinearLayout row = null;
+        for (int i = 0; i < names.length; i++) {
+            final int idx = i;
+            if (i % 3 == 0) {
+                row = Ui.box(this, false);
+                LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, px(.1f));
+                rl.topMargin = px(.015f);
+                content.addView(row, rl);
+            }
+            boolean on = i == sel;
+            TextView t = Ui.text(this, names[i], .036f, on ? Ui.ON_AMBER : Ui.SOFT);
+            if (on) t.setTypeface(Ui.medium());
+            t.setGravity(Gravity.CENTER);
+            t.setSingleLine(true);
+            t.setBackground(Ui.tile(this, on ? Ui.AMBER : Ui.TILE, .035f));
+            t.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    pick.pick(idx);
+                }
+            });
+            LinearLayout.LayoutParams lp = Ui.lp(0, -1, 1f);
+            if (i % 3 != 0) lp.leftMargin = px(.015f);
+            row.addView(t, lp);
+        }
+        for (int i = names.length % 3; i != 0 && i < 3; i++) { // dorovnat řádek
+            LinearLayout.LayoutParams lp = Ui.lp(0, -1, 1f);
+            lp.leftMargin = px(.015f);
+            row.addView(new View(this), lp);
+        }
+    }
+
     private void standby() {
+        final android.content.SharedPreferences sp = Prefs.get(this);
+        heading("Barevná paleta");
+        choices(Ui.PALETTES, sp.getInt("palette", 0), new Pick() {
+            public void pick(int i) {
+                sp.edit().putInt("palette", i).apply();
+                Ui.loadFonts(SettingsActivity.this);
+                recreate();
+            }
+        });
+
         heading("Vzhled standby");
-        final boolean random = Prefs.get(this).getBoolean("standby_random", false);
-        final int sel = Prefs.get(this).getInt("standby_style", StandbyFace.CLASSIC);
+        note("Klepnutím vybereš, podržením označíš ★ oblíbené – mezi nimi se pak střídá.");
+        final int rot = StandbyFace.rotation(this);
+        final int sel = sp.getInt("standby_style", StandbyFace.CLASSIC);
+        final int favs = StandbyFace.favs(this);
         android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
         int sw = Math.max(dm.widthPixels, dm.heightPixels), sh = Math.min(dm.widthPixels, dm.heightPixels);
         int gap = px(.025f);
@@ -256,10 +315,11 @@ public class SettingsActivity extends BaseActivity {
             if (i % 2 == 0) {
                 row = Ui.box(this, false);
                 LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
-                rl.topMargin = px(i == 0 ? .01f : .025f);
+                rl.topMargin = px(i == 0 ? .02f : .025f);
                 content.addView(row, rl);
             }
-            boolean on = !random && i == sel;
+            boolean on = rot == 0 && i == sel;
+            boolean fav = (favs & (1 << i)) != 0;
             LinearLayout tile = Ui.box(this, true);
             android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
             android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
@@ -276,26 +336,56 @@ public class SettingsActivity extends BaseActivity {
             face.setAlarm("6:30", "· za 7 h");
             frame.addView(face, new android.widget.FrameLayout.LayoutParams(-1, -1));
             tile.addView(frame, new LinearLayout.LayoutParams(tileW, prevH));
-            TextView name = Ui.text(this, StandbyFace.NAMES[i], .036f, on ? Ui.AMBER : Ui.SOFT);
-            if (on) name.setTypeface(Ui.medium());
+            TextView name = Ui.text(this, (fav ? "★ " : "") + StandbyFace.NAMES[i], .036f,
+                    on ? Ui.AMBER : fav ? Ui.INK : Ui.SOFT);
+            if (on || fav) name.setTypeface(Ui.medium());
             name.setPadding(px(.01f), px(.012f), 0, 0);
             tile.addView(name);
             tile.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
-                    Prefs.get(SettingsActivity.this).edit().putInt("standby_style", idx)
+                    sp.edit().putInt("standby_style", idx).putInt("standby_rotate", 0)
                             .putBoolean("standby_random", false).apply();
                     render();
+                }
+            });
+            tile.setOnLongClickListener(new View.OnLongClickListener() {
+                public boolean onLongClick(View v) {
+                    sp.edit().putInt("standby_favs", StandbyFace.favs(SettingsActivity.this) ^ (1 << idx)).apply();
+                    render();
+                    return true;
                 }
             });
             LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(tileW, -2);
             if (i % 2 == 1) tl.leftMargin = gap;
             row.addView(tile, tl);
         }
-        toggle("Každý den jiný vzhled", "standby_random", false, new Runnable() {
-            public void run() {
+
+        heading("Střídání vzhledů");
+        choices(new String[]{"Ne", "Každý den", "Každou hodinu"}, rot, new Pick() {
+            public void pick(int i) {
+                sp.edit().putInt("standby_rotate", i).putBoolean("standby_random", false).apply();
                 render();
             }
         });
+        note(favs == 0 ? "Střídají se všechny vzhledy (žádný není ★)." : "Střídají se jen ★ oblíbené.");
+
+        heading("Barvy");
+        toggle("Barvy podle žárovky", "standby_ambient", false, null);
+        note("Láva, Bauhaus, Memphis a Pop art převezmou barvu, kterou svítí žárovka.");
+        toggle("Standby v barvě obalu alba", "art_color", true, null);
+
+        heading("Pozadí plochy");
+        choices(PatternView.NAMES, sp.getInt("home_pattern", 0), new Pick() {
+            public void pick(int i) {
+                sp.edit().putInt("home_pattern", i).apply();
+                render();
+            }
+        });
+
+        heading("Zvuky rozhraní");
+        toggle("Jemné zvuky klepnutí", "ui_sounds", true, null);
+        toggle("Zvuky i v noci (22–7)", "ui_sounds_night", false, null);
+
         action("Ukázat standby teď", Ui.AMBER, new Runnable() {
             public void run() {
                 startActivity(new Intent(SettingsActivity.this, MainActivity.class)
@@ -304,7 +394,72 @@ public class SettingsActivity extends BaseActivity {
                 finish();
             }
         });
-        note("Když něco hraje, standby místo hodin ukazuje přehrávač (obal, název, ovládání).");
+        note("Na standby: podržením otevřeš rychlé menu (vzhled, světlo, budík za 8 h, rádio).");
+    }
+
+    // ------------------------------------------------------------------ budík
+    private void alarm() {
+        final android.content.SharedPreferences sp = Prefs.get(this);
+        heading("Po vypnutí budíku");
+        toggle("Pustit rádio", "alarm_radio", false, new Runnable() {
+            public void run() {
+                render();
+            }
+        });
+        org.json.JSONArray fav;
+        try {
+            fav = new JSONArray(getSharedPreferences("radio", MODE_PRIVATE).getString("fav", "[]"));
+        } catch (Exception e) {
+            fav = new JSONArray();
+        }
+        if (fav.length() == 0) {
+            note("Nejdřív si v Rádiu označ ★ oblíbené stanice – tady pak vybereš, která hraje po budíku.");
+            action("Otevřít rádio", Ui.TILE, new Runnable() {
+                public void run() {
+                    startActivity(new Intent(SettingsActivity.this, RadioActivity.class));
+                }
+            });
+        } else {
+            String cur = sp.getString("alarm_radio_url", "");
+            if (cur.length() == 0) { // výchozí = první oblíbená
+                org.json.JSONObject o = fav.optJSONObject(0);
+                sp.edit().putString("alarm_radio_url", o.optString("url")).putString("alarm_radio_name", o.optString("name"))
+                        .putString("alarm_radio_favicon", o.optString("favicon", "")).apply();
+                cur = o.optString("url");
+            }
+            TextView l = Ui.text(this, "Stanice", .034f, Ui.DIM);
+            l.setPadding(0, px(.03f), 0, 0);
+            content.addView(l);
+            String[] names = new String[fav.length()];
+            int sel = -1;
+            for (int i = 0; i < fav.length(); i++) {
+                org.json.JSONObject o = fav.optJSONObject(i);
+                names[i] = o.optString("name").trim();
+                if (o.optString("url").equals(cur)) sel = i;
+            }
+            final JSONArray ff = fav;
+            choices(names, sel, new Pick() {
+                public void pick(int i) {
+                    org.json.JSONObject o = ff.optJSONObject(i);
+                    sp.edit().putString("alarm_radio_url", o.optString("url")).putString("alarm_radio_name", o.optString("name"))
+                            .putString("alarm_radio_favicon", o.optString("favicon", "")).putBoolean("alarm_radio", true).apply();
+                    render();
+                }
+            });
+            note("Hraje hned po stisku Vypnout (a po ranním tisku). Odložení rádio nepouští.");
+        }
+        heading("Vyzkoušet");
+        action("Zkušební budík za 1 minutu", Ui.AMBER, new Runnable() {
+            public void run() {
+                Alarms.test(SettingsActivity.this, 60);
+                Toast.makeText(SettingsActivity.this, "Budík zazvoní za minutu", Toast.LENGTH_LONG).show();
+            }
+        });
+        action("Nastavit budíky", Ui.TILE, new Runnable() {
+            public void run() {
+                startActivity(new Intent(SettingsActivity.this, AlarmsActivity.class));
+            }
+        });
     }
 
     private void weather() {

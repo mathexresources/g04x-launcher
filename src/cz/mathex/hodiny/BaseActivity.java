@@ -15,6 +15,14 @@ public abstract class BaseActivity extends Activity {
 
     private final Handler idle = new Handler(Looper.getMainLooper());
     private long lastTouch;
+    private int builtGen = -1;
+
+    @Override
+    protected void onCreate(android.os.Bundle b) {
+        super.onCreate(b);
+        Ui.loadFonts(this);
+        builtGen = Ui.paletteGen;
+    }
 
     private final Runnable check = new Runnable() {
         public void run() {
@@ -47,6 +55,12 @@ public abstract class BaseActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        Ui.loadFonts(this);
+        if (builtGen != -1 && builtGen != Ui.paletteGen) { // mezitím se změnila paleta
+            builtGen = Ui.paletteGen;
+            recreate();
+            return;
+        }
         Ui.immersive(this);
         lastTouch = System.currentTimeMillis();
         idle.removeCallbacks(check);
@@ -71,6 +85,7 @@ public abstract class BaseActivity extends Activity {
     @Override
     public boolean dispatchTouchEvent(MotionEvent e) {
         lastTouch = System.currentTimeMillis();
+        Sounds.touch(this, e);
         return super.dispatchTouchEvent(e);
     }
 }

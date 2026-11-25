@@ -24,25 +24,104 @@ import android.widget.Toast;
  * čísla Space Grotesk, texty systémové Roboto (ostřejší na 480p). Všechny rozměry jsou poměrem k výšce displeje (480 px = 1.0).
  */
 final class Ui {
-    static final int BG = 0xFF0F1216;
-    static final int BG_STANDBY = 0xFF07080A;
-    static final int TILE = 0xFF171B21;
-    static final int TILE_PRESSED = 0xFF232A33;
-    static final int PILL = 0xFF111419;
-    static final int LINE = 0xFF262C35;
+    // barvy se mění podle zvolené palety (applyPalette) – proto nejsou final
+    static int BG = 0xFF0F1216;
+    static int BG_STANDBY = 0xFF07080A;
+    static int TILE = 0xFF171B21;
+    static int TILE_PRESSED = 0xFF232A33;
+    static int PILL = 0xFF111419;
+    static int LINE = 0xFF262C35;
     static final int INK = 0xFFEEF1F4;
     static final int SOFT = 0xFFC9D0D8;
     static final int DIM = 0xFF9AA3AE;
     static final int FAINT = 0xFF7C8590;
-    static final int AMBER = 0xFFF5B54A;
-    static final int AMBER_SOFT = 0xFFC8A15E;
-    static final int AMBER_BG = 0x1FF5B54A;
-    static final int ON_AMBER = 0xFF1A1408;
-    static final int TEAL = 0xFF6CC6C0;
-    static final int TEAL_BG = 0xFF1F3A39;
-    static final int ACCENT = TEAL;
+    static int AMBER = 0xFFF5B54A;
+    static int AMBER_SOFT = 0xFFC8A15E;
+    static int AMBER_BG = 0x1FF5B54A;
+    static int ON_AMBER = 0xFF1A1408;
+    static int TEAL = 0xFF6CC6C0;
+    static int TEAL_BG = 0xFF1F3A39;
+    static int ACCENT = TEAL;
     static final int NIGHT = 0xFFC8503F;
     static final int BAD = 0xFFFF7A7A;
+
+    static final String[] PALETTES = {"Ember", "Les", "Oceán", "Neon", "Mono"};
+    /** bg, standby, dlaždice, stisknutá, pilulka, linka, hlavní, hlavní tlumená, na hlavní, druhá, druhá pozadí */
+    private static final int[][] PAL = {
+            {0xFF0F1216, 0xFF07080A, 0xFF171B21, 0xFF232A33, 0xFF111419, 0xFF262C35,
+                    0xFFF5B54A, 0xFFC8A15E, 0xFF1A1408, 0xFF6CC6C0, 0xFF1F3A39},
+            {0xFF0E1310, 0xFF060907, 0xFF161D18, 0xFF212B24, 0xFF101511, 0xFF243029,
+                    0xFFB8DC6E, 0xFF97AE68, 0xFF141A08, 0xFF6FC49A, 0xFF1E3A2C},
+            {0xFF0C1118, 0xFF05080C, 0xFF141B25, 0xFF1E2835, 0xFF0F151D, 0xFF222D3B,
+                    0xFF5CB8F5, 0xFF6E9EC2, 0xFF06121C, 0xFFF59E7A, 0xFF3A2620},
+            {0xFF120E18, 0xFF08060B, 0xFF1C1623, 0xFF292032, 0xFF15101B, 0xFF2E2538,
+                    0xFFFF5FB2, 0xFFC27099, 0xFF1E0814, 0xFF8E7CFF, 0xFF27214A},
+            {0xFF101010, 0xFF060606, 0xFF1A1A1A, 0xFF262626, 0xFF131313, 0xFF2A2A2A,
+                    0xFFF2F2F2, 0xFFB0B0B0, 0xFF111111, 0xFFB8B8B8, 0xFF2A2A2A},
+    };
+    private static int paletteId = -1;
+    /** Zvyšuje se při změně palety – obrazovky se podle něj znovu sestaví. */
+    static int paletteGen;
+
+    static void applyPalette(Context c) {
+        int id = Prefs.get(c).getInt("palette", 0);
+        if (id < 0 || id >= PAL.length) id = 0;
+        if (id == paletteId) return;
+        int[] q = PAL[id];
+        BG = q[0]; BG_STANDBY = q[1]; TILE = q[2]; TILE_PRESSED = q[3]; PILL = q[4]; LINE = q[5];
+        AMBER = q[6]; AMBER_SOFT = q[7]; ON_AMBER = q[8]; TEAL = q[9]; TEAL_BG = q[10];
+        AMBER_BG = 0x1F000000 | (AMBER & 0xFFFFFF);
+        ACCENT = TEAL;
+        if (paletteId != -1) paletteGen++;
+        paletteId = id;
+    }
+
+    /** Výrazná barva obrázku (obal alba) – nejsytější z jasných pixelů zmenšeniny; 0 = nic výrazného. */
+    static int dominant(android.graphics.Bitmap b) {
+        if (b == null) return 0;
+        try {
+            android.graphics.Bitmap s = android.graphics.Bitmap.createScaledBitmap(b, 24, 24, true);
+            float best = 0;
+            int bestC = 0;
+            float[] hsv = new float[3];
+            for (int y = 0; y < 24; y++) {
+                for (int x = 0; x < 24; x++) {
+                    int px = s.getPixel(x, y);
+                    android.graphics.Color.colorToHSV(px, hsv);
+                    if (hsv[2] < .25f) continue;
+                    float score = hsv[1] * (.4f + hsv[2]);
+                    if (score > best) { best = score; bestC = px; }
+                }
+            }
+            if (best < .15f) return 0;
+            android.graphics.Color.colorToHSV(bestC, hsv);
+            hsv[1] = Math.min(1f, Math.max(.45f, hsv[1]));
+            hsv[2] = Math.max(.75f, hsv[2]);
+            return android.graphics.Color.HSVToColor(hsv);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** Směs dvou barev (t = 0 → a, 1 → b). */
+    static int mix(int a, int b, float t) {
+        int ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
+        int br = (b >> 16) & 0xFF, bg = (b >> 8) & 0xFF, bb = b & 0xFF;
+        return 0xFF000000 | ((int) (ar + (br - ar) * t) << 16) | ((int) (ag + (bg - ag) * t) << 8) | (int) (ab + (bb - ab) * t);
+    }
+
+    /** Posun odstínu o deg stupňů. */
+    static int hue(int c, float deg) {
+        float[] hsv = new float[3];
+        android.graphics.Color.colorToHSV(c, hsv);
+        hsv[0] = (hsv[0] + deg + 360) % 360;
+        return android.graphics.Color.HSVToColor(hsv);
+    }
+
+    static boolean light(int c) {
+        int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
+        return r * .299 + g * .587 + b * .114 > 150;
+    }
 
     private static Typeface spaceLight, spaceRegular, interRegular, interSemi;
 
@@ -66,6 +145,7 @@ final class Ui {
     }
 
     static void loadFonts(Context c) {
+        applyPalette(c);
         if (interRegular != null) return;
         spaceLight = font(c, "space_light.ttf", Typeface.create("sans-serif-light", Typeface.NORMAL));
         spaceRegular = font(c, "space_regular.ttf", Typeface.create("sans-serif", Typeface.NORMAL));

@@ -45,6 +45,12 @@ public class StandbyFace extends View {
     private final TextPaint tp = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rf = new RectF();
     private Drawable alarmIcon;
+    private int ambient; // barva žárovky (0 = nepoužívat)
+    private int lastHour = -1;
+    private long celebStart; // animace o celé hodině
+    private long pokeStart; // reakce očiček
+    private int pokeKind;
+    static final int POKE_WAVE = 0, POKE_CLAP = 1, POKE_TOUCH = 2;
     private int frameMs = 50; // animované vzhledy ~20 fps (náhledy pomaleji)
     private final android.graphics.Path path = new android.graphics.Path();
     private final java.util.Random rnd = new java.util.Random();
@@ -65,11 +71,36 @@ public class StandbyFace extends View {
         alarmIcon.setTint(Ui.AMBER);
     }
 
-    /** Uložený styl; s volbou „každý den jiný“ se vybere podle dne v roce. */
+    /** Oblíbené vzhledy (bitová maska); 0 = žádné vybrané → všechny. */
+    static int favs(Context c) {
+        return Prefs.get(c).getInt("standby_favs", 0);
+    }
+
+    /** Střídání: 0 = ne, 1 = každý den, 2 = každou hodinu. */
+    static int rotation(Context c) {
+        android.content.SharedPreferences sp = Prefs.get(c);
+        if (!sp.contains("standby_rotate") && sp.getBoolean("standby_random", false)) return 1; // starší volba
+        return sp.getInt("standby_rotate", 0);
+    }
+
+    /** Vzhledy, mezi kterými se střídá (oblíbené, nebo všechny). */
+    static int[] pool(Context c) {
+        int f = favs(c), n = 0;
+        for (int i = 0; i < COUNT; i++) if ((f & (1 << i)) != 0) n++;
+        int[] out = new int[n == 0 ? COUNT : n];
+        for (int i = 0, k = 0; i < COUNT; i++) if (n == 0 || (f & (1 << i)) != 0) out[k++] = i;
+        return out;
+    }
+
+    /** Vzhled, který se má ukázat teď. */
     static int resolve(Context c) {
-        if (Prefs.get(c).getBoolean("standby_random", false)) {
-            int doy = Calendar.getInstance().get(Calendar.DAY_OF_YEAR);
-            return doy % COUNT;
+        int rot = rotation(c);
+        if (rot > 0) {
+            int[] pool = pool(c);
+            Calendar now = Calendar.getInstance();
+            int k = now.get(Calendar.YEAR) * 366 + now.get(Calendar.DAY_OF_YEAR);
+            if (rot == 2) k = k * 24 + now.get(Calendar.HOUR_OF_DAY);
+            return pool[k % pool.length];
         }
         int s = Prefs.get(c).getInt("standby_style", CLASSIC);
         return s >= 0 && s < COUNT ? s : CLASSIC;
@@ -85,6 +116,23 @@ public class StandbyFace extends View {
     /** Malý náhled v nastavení – animace stačí pomaleji. */
     void setPreview(boolean on) {
         frameMs = on ? 120 : 50;
+    }
+
+    /** Barva podle chytré žárovky (Láva, Bauhaus, Memphis, Pop art); 0 = vlastní barvy. */
+    void setAmbient(int color) {
+        if (color == ambient) return;
+        ambient = color;
+        invalidate();
+    }
+
+    /** Reakce na mávnutí / tlesknutí / dotek – teď jen Očička. Vrací true, když se na reakci vyplatí počkat. */
+    boolean poke(int kind) {
+        if (style != EYES || getVisibility() != VISIBLE) return false;
+        pokeKind = kind;
+        pokeStart = SystemClock.uptimeMillis();
+        if (kind == POKE_TOUCH) blinkAt = pokeStart;
+        invalidate();
+        return true;
     }
 
     int getStyle() {
@@ -143,7 +191,29 @@ public class StandbyFace extends View {
             case KONSTRUKT: konstrukt(c, now); break;
             default: classic(c, now); break;
         }
+        celebrate(c, now);
         if (style == EYES || style == LAVA || style == WATER || style == ORBIT) postInvalidateDelayed(frameMs);
+    }
+
+    /** O celé hodině se přes vzhled rozběhnou kruhy (náhledy ne). */
+    private void celebrate(Canvas c, Calendar now) {
+        int hr = now.get(Calendar.HOUR_OF_DAY);
+        if (lastHour != -1 && hr != lastHour && frameMs == 50) celebStart = SystemClock.uptimeMillis();
+        lastHour = hr;
+        long d = SystemClock.uptimeMillis() - celebStart;
+        if (celebStart == 0 || d > 2200) return;
+        float W = getWidth(), H = getHeight();
+        p.setShader(null);
+        p.setStyle(Paint.Style.STROKE);
+        for (int i = 0; i < 3; i++) {
+            float t = (d - i * 250) / 1600f;
+            if (t <= 0 || t >= 1) continue;
+            p.setStrokeWidth(H * .02f * (1 - t));
+            int col = i == 1 ? Ui.TEAL : Ui.AMBER;
+            p.setColor(((int) (0xC0 * (1 - t)) << 24) | (col & 0xFFFFFF));
+            c.drawCircle(W / 2, H / 2, (float) Math.hypot(W, H) * .55f * t, p);
+        }
+        postInvalidateOnAnimation();
     }
 
     private static float secs() {
@@ -601,17 +671,37 @@ public class StandbyFace extends View {
             else { lookTX = rnd.nextFloat() * 2 - 1; lookTY = rnd.nextFloat() * 1.6f - .8f; }
             nextLook = ms + 1500 + rnd.nextInt(3500);
         }
-        lookX += (lookTX - lookX) * .18f;
-        lookY += (lookTY - lookY) * .18f;
+        long pd = ms - pokeStart;
+        boolean poked = pokeStart > 0 && pd < 1100;
+        float wide = 0, pupil = 1;
+        if (poked) {
+            float env = (float) Math.sin(Math.PI * Math.min(1f, pd / 1100f));
+            if (pokeKind == POKE_WAVE) { // těkají sem a tam za pohybem
+                lookTX = (float) Math.sin(pd / 90.0) * .9f;
+                lookTY = -.2f;
+                wide = .12f * env;
+            } else if (pokeKind == POKE_CLAP) { // lekly se
+                wide = .25f * env;
+                pupil = 1 - .45f * env;
+                lookTX = 0; lookTY = 0;
+            } else { // dotek – zamžourají
+                lookTX = 0; lookTY = .3f;
+            }
+            nextLook = ms + 1200;
+        }
+        lookX += (lookTX - lookX) * (poked ? .45f : .18f);
+        lookY += (lookTY - lookY) * (poked ? .45f : .18f);
         if (blinkAt == 0 || ms > blinkAt + 2000) blinkAt = ms + 2500 + rnd.nextInt(4500);
         float blink = 0;
         long bd = ms - blinkAt;
         if (bd >= 0 && bd < 220) blink = (float) Math.sin(Math.PI * bd / 220.0);
         int hr = now.get(Calendar.HOUR_OF_DAY);
         float sleepy = hr >= 22 || hr < 6 ? .42f : 0f; // v noci ospalá víčka
+        if (poked && pokeKind != POKE_TOUCH) sleepy = 0; // probudila se
         float lid = Math.max(blink, sleepy);
+        if (poked && pokeKind == POKE_TOUCH) lid = Math.max(lid, .5f * (float) Math.sin(Math.PI * Math.min(1f, pd / 1100f)));
 
-        float rx = Math.min(H * .2f, W * .15f), ry = rx * 1.18f, ey = H * .4f;
+        float rx = Math.min(H * .2f, W * .15f) * (1 + wide), ry = rx * 1.18f, ey = H * .4f;
         for (int i = 0; i < 2; i++) {
             float ex = W / 2 + (i == 0 ? -1 : 1) * rx * 1.35f;
             rf.set(ex - rx, ey - ry, ex + rx, ey + ry);
@@ -625,9 +715,9 @@ public class StandbyFace extends View {
             c.drawOval(rf, p);
             float px0 = ex + lookX * rx * .42f, py0 = ey + lookY * ry * .4f;
             p.setColor(Ui.TEAL);
-            c.drawCircle(px0, py0, rx * .52f, p);
+            c.drawCircle(px0, py0, rx * .52f * pupil, p);
             p.setColor(Ui.BG_STANDBY);
-            c.drawCircle(px0, py0, rx * .3f, p);
+            c.drawCircle(px0, py0, rx * .3f * pupil, p);
             p.setColor(Ui.INK);
             c.drawCircle(px0 - rx * .14f, py0 - rx * .16f, rx * .1f, p);
             if (lid > 0) {
@@ -652,7 +742,11 @@ public class StandbyFace extends View {
     private static final float[][] BLOBS = { // fáze, rychlost, poloměr
             {0f, .11f, .55f}, {1.7f, .08f, .45f}, {3.1f, .13f, .38f}, {4.4f, .07f, .6f}, {5.6f, .1f, .34f},
             {2.4f, .09f, .42f}};
-    private static final int[] LAVA_C = {Ui.AMBER, Ui.TEAL, CORAL, VIOLET, Ui.AMBER, CORAL};
+    private int[] lavaC() {
+        if (ambient != 0) return new int[]{ambient, Ui.hue(ambient, 35), Ui.hue(ambient, -35), Ui.hue(ambient, 160),
+                ambient, Ui.hue(ambient, -70)};
+        return new int[]{Ui.AMBER, Ui.TEAL, CORAL, VIOLET, Ui.AMBER, CORAL};
+    }
 
     private void lava(Canvas c, Calendar now) {
         float W = getWidth(), H = getHeight(), t = secs();
@@ -663,7 +757,8 @@ public class StandbyFace extends View {
             float x = W * (.5f + .42f * (float) Math.sin(t * b[1] + b[0]));
             float y = H * (.5f + .45f * (float) Math.sin(t * b[1] * .73f + b[0] * 1.3f));
             float r = H * b[2] * (1 + .12f * (float) Math.sin(t * .5f + i));
-            int col = LAVA_C[(i + shift) % LAVA_C.length];
+            int[] lc = lavaC();
+            int col = lc[(i + shift) % lc.length];
             p.setShader(new android.graphics.RadialGradient(x, y, r,
                     new int[]{(0x70 << 24) | (col & 0xFFFFFF), (0x30 << 24) | (col & 0xFFFFFF), col & 0xFFFFFF},
                     new float[]{0f, .55f, 1f}, android.graphics.Shader.TileMode.CLAMP));
@@ -787,7 +882,10 @@ public class StandbyFace extends View {
     }
 
     // ------------------------------------------------------------------ 10 bauhaus
-    private static final int[] BAU_C = {Ui.AMBER, Ui.TEAL, CORAL, VIOLET};
+    private int[] bauC() {
+        if (ambient != 0) return new int[]{ambient, Ui.hue(ambient, 150), Ui.hue(ambient, 40), Ui.hue(ambient, -60)};
+        return new int[]{Ui.AMBER, Ui.TEAL, CORAL, VIOLET};
+    }
 
     private void bauhaus(Canvas c, Calendar now) {
         float W = getWidth(), H = getHeight();
@@ -800,6 +898,7 @@ public class StandbyFace extends View {
             ch *= k; cw *= k; gap *= k; colon *= k; total *= k;
         }
         float x = (W - total) / 2, y = H * .5f - ch / 2;
+        int[] BAU_C = bauC();
         for (int i = 0; i < 4; i++) {
             int v = d.charAt(i) - '0';
             p.setShader(null);
@@ -939,7 +1038,11 @@ public class StandbyFace extends View {
     }
 
     // ------------------------------------------------------------------ 12 memphis
-    private static final int[] MEMPHIS_C = {PINK, MINT, YELLOW, LILAC, CORAL, Ui.TEAL};
+    private int[] memphisC() {
+        if (ambient != 0) return new int[]{ambient, Ui.hue(ambient, 60), Ui.hue(ambient, -60), Ui.hue(ambient, 180),
+                PINK, Ui.hue(ambient, 120)};
+        return new int[]{PINK, MINT, YELLOW, LILAC, CORAL, Ui.TEAL};
+    }
 
     private void memphis(Canvas c, Calendar now) {
         float W = getWidth(), H = getHeight();
@@ -952,6 +1055,7 @@ public class StandbyFace extends View {
         // každou minutu se tvary přeskládají (zároveň ochrana displeje)
         java.util.Random rr = new java.util.Random(dayHourSeed(now) * 60L + now.get(Calendar.MINUTE));
         float sw = Math.max(2f, H * .012f);
+        int[] MEMPHIS_C = memphisC();
         int placed = 0;
         for (int tries = 0; tries < 200 && placed < 18; tries++) {
             float sz = H * (.07f + .07f * rr.nextFloat());
@@ -1097,7 +1201,7 @@ public class StandbyFace extends View {
         float step = H * .045f;
         p.setShader(null);
         p.setStyle(Paint.Style.FILL);
-        p.setColor(0x40E8735E);
+        p.setColor(0x40000000 | ((ambient != 0 ? Ui.hue(ambient, -40) : CORAL) & 0xFFFFFF));
         for (float y = step / 2; y < H; y += step) {
             boolean odd = ((int) (y / step)) % 2 == 1;
             for (float x = odd ? step : step / 2; x < W; x += step) {
@@ -1119,7 +1223,7 @@ public class StandbyFace extends View {
             if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
         }
         path.close();
-        p.setColor(RED);
+        p.setColor(ambient != 0 ? ambient : RED);
         c.drawPath(path, p);
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeWidth(H * .012f);
@@ -1143,7 +1247,7 @@ public class StandbyFace extends View {
         p.setStrokeJoin(Paint.Join.ROUND);
         c.drawText(tm, cx, by, p);
         p.setStyle(Paint.Style.FILL);
-        p.setColor(YELLOW);
+        p.setColor(ambient != 0 ? Ui.hue(ambient, 50) : YELLOW);
         c.drawText(tm, cx, by, p);
         p.setStrokeJoin(Paint.Join.MITER);
         // bublina s dnem

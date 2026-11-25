@@ -171,6 +171,22 @@ public class RingService extends Service {
         if (a != null && a.print) Prefs.printMorning(this, true); // výsledek ukáže toast
         if (Yeelight.configured(this) && Prefs.get(this).getBoolean("bulb_full_on_dismiss", true)) Yeelight.full(this);
         stopAll();
+        startRadio(getApplicationContext());
+    }
+
+    /** Po vypnutí budíku pustit zvolenou stanici (Nastavení → Budík). */
+    static void startRadio(final android.content.Context c) {
+        android.content.SharedPreferences sp = Prefs.get(c);
+        if (!sp.getBoolean("alarm_radio", false)) return;
+        final String url = sp.getString("alarm_radio_url", "");
+        if (url.length() == 0) return;
+        final String name = sp.getString("alarm_radio_name", "Rádio");
+        final String fav = sp.getString("alarm_radio_favicon", "");
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+            public void run() {
+                RadioService.play(c, name, url, fav);
+            }
+        }, 1500); // až zvonění uvolní zvuk
     }
 
     private void stopAll() {

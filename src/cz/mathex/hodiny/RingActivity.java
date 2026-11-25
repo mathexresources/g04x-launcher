@@ -46,7 +46,14 @@ public class RingActivity extends Activity {
         chip.setGravity(Gravity.CENTER_VERTICAL);
         chip.setBackground(Ui.round(Ui.AMBER_BG, Ui.px(this, .5f)));
         chip.setPadding(Ui.px(this, .033f), Ui.px(this, .015f), Ui.px(this, .033f), Ui.px(this, .015f));
-        chip.addView(Ui.icon(this, R.drawable.ic_alarm, Ui.AMBER, .042f));
+        android.widget.ImageView bell = Ui.icon(this, R.drawable.ic_alarm, Ui.AMBER, .042f);
+        chip.addView(bell);
+        // zvoneček se třese
+        android.animation.ObjectAnimator wob = android.animation.ObjectAnimator.ofFloat(bell, "rotation",
+                0, -18, 16, -12, 8, 0, 0, 0);
+        wob.setDuration(1100);
+        wob.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        wob.start();
         TextView cl = Ui.text(this, "Budík", .035f, Ui.AMBER);
         cl.setTypeface(Ui.medium());
         chip.addView(cl, Ui.left(this, .02f));
@@ -57,7 +64,19 @@ public class RingActivity extends Activity {
                 + (c.get(Calendar.MINUTE) < 10 ? "0" : "") + c.get(Calendar.MINUTE), .41f, Ui.INK);
         time.setTypeface(Ui.display());
         time.setLetterSpacing(-0.04f);
-        center.addView(time, Ui.top(this, .025f));
+        // za časem pulzují kruhy
+        android.widget.FrameLayout tf = new android.widget.FrameLayout(this);
+        tf.addView(new Pulse(this), new android.widget.FrameLayout.LayoutParams(-1, -1));
+        time.setGravity(Gravity.CENTER);
+        tf.addView(time, new android.widget.FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
+        center.addView(tf, new LinearLayout.LayoutParams(-1, -2));
+        android.animation.ObjectAnimator sx = android.animation.ObjectAnimator.ofFloat(time, "scaleX", 1f, 1.035f, 1f);
+        android.animation.ObjectAnimator sy = android.animation.ObjectAnimator.ofFloat(time, "scaleY", 1f, 1.035f, 1f);
+        for (android.animation.ObjectAnimator o : new android.animation.ObjectAnimator[]{sx, sy}) {
+            o.setDuration(1100);
+            o.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+            o.start();
+        }
 
         Alarms.Alarm me = Alarms.find(Alarms.load(this), alarmId);
         if (me != null && me.print) {
@@ -147,5 +166,29 @@ public class RingActivity extends Activity {
     @Override
     public void onBackPressed() {
         snooze();
+    }
+
+    /** Kruhy, které se rozbíhají od středu v rytmu zvonění. */
+    static final class Pulse extends View {
+        private final android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final long start = android.os.SystemClock.uptimeMillis();
+
+        Pulse(android.content.Context c) {
+            super(c);
+            p.setStyle(android.graphics.Paint.Style.FILL);
+        }
+
+        @Override
+        protected void onDraw(android.graphics.Canvas c) {
+            float w = getWidth(), h = getHeight();
+            long d = android.os.SystemClock.uptimeMillis() - start;
+            float maxR = Math.max(w, h) * .6f;
+            for (int i = 0; i < 3; i++) {
+                float t = ((d + i * 733) % 2200) / 2200f;
+                p.setColor(((int) (0x38 * (1 - t)) << 24) | (Ui.AMBER & 0xFFFFFF));
+                c.drawCircle(w / 2, h / 2, h * .15f + maxR * t, p);
+            }
+            postInvalidateDelayed(40);
+        }
     }
 }

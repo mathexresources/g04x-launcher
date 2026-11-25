@@ -66,6 +66,17 @@ public class MainActivity extends Activity {
     // standby
     private FrameLayout standby;
     private StandbyFace sbFace;
+    private PatternView pattern;
+    private int builtGen;
+    private int artColor; // barva z obalu alba (0 = žádná)
+    private FrameLayout quickMenu;
+    private boolean longFired;
+    private final Runnable longPress = new Runnable() {
+        public void run() {
+            longFired = true;
+            showQuickMenu();
+        }
+    };
     private LinearLayout sbCenter, sbMedia, sbAlarm, sbPrev, sbPlay, sbNext;
     private TextView sbDate, sbClock, sbAlarmTime, sbAlarmLeft, sbTitle, sbSub, sbHint;
     private ImageView sbAlarmIcon, sbMediaIcon, sbArtImg, mArtImg;
@@ -113,9 +124,12 @@ public class MainActivity extends Activity {
         Ui.loadFonts(this);
         getWindow().getDecorView().setBackgroundColor(Ui.BG);
         FrameLayout root = new FrameLayout(this);
+        builtGen = Ui.paletteGen;
+        pattern = new PatternView(this);
+        pattern.setKind(Prefs.get(this).getInt("home_pattern", 0));
+        root.addView(pattern, new FrameLayout.LayoutParams(-1, -1));
 
         LinearLayout main = Ui.box(this, true);
-        main.setBackgroundColor(Ui.BG);
         main.setPadding(px(.0625f), px(.054f), px(.0625f), px(.05f));
         root.addView(main, new FrameLayout.LayoutParams(-1, -1));
 
@@ -520,7 +534,7 @@ public class MainActivity extends Activity {
                     if (isPlaying(mc)) mc.getTransportControls().pause();
                     else mc.getTransportControls().play();
                 } else if (standbyOn) {
-                    setStandby(false);
+                    wakeUp(StandbyFace.POKE_CLAP);
                 }
                 android.widget.Toast.makeText(MainActivity.this, "👏👏", android.widget.Toast.LENGTH_SHORT).show();
             }
@@ -537,6 +551,13 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        Ui.loadFonts(this);
+        if (builtGen != Ui.paletteGen) { // změnila se paleta → sestavit znovu
+            recreate();
+            return;
+        }
+        pattern.setKind(Prefs.get(this).getInt("home_pattern", 0));
+        sbFace.setStyle(StandbyFace.resolve(this));
         Ui.immersive(this);
         lastTouch = System.currentTimeMillis();
         if (System.currentTimeMillis() - Prefs.get(this).getLong("weather_ts", 0) > WEATHER_EVERY) loadWeather();
@@ -597,19 +618,34 @@ public class MainActivity extends Activity {
     @Override
     public boolean dispatchTouchEvent(MotionEvent e) {
         lastTouch = System.currentTimeMillis();
+        if (quickMenu != null) { // rychlé menu na standby: dotyky patří jemu
+            if (swallowTouch) {
+                if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL)
+                    swallowTouch = false;
+                return true;
+            }
+            Sounds.touch(this, e);
+            return super.dispatchTouchEvent(e);
+        }
         if (e.getActionMasked() == MotionEvent.ACTION_DOWN && standbyOn) {
             if (!inside(sbControls, e)) {
-                setStandby(false);
-                swallowTouch = true; // první dotek jen probudí, nic nespustí
+                // krátký dotek = probudit, podržení = rychlé menu
+                swallowTouch = true;
+                longFired = false;
+                h.postDelayed(longPress, 550);
             }
             // dotek na ovládání hudby projde a standby zůstane
         }
         if (swallowTouch) {
-            if (e.getActionMasked() == MotionEvent.ACTION_UP || e.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+            int a = e.getActionMasked();
+            if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) {
+                h.removeCallbacks(longPress);
                 swallowTouch = false;
+                if (!longFired && a == MotionEvent.ACTION_UP) wakeUp(StandbyFace.POKE_TOUCH);
             }
             return true;
         }
+        Sounds.touch(this, e);
         return super.dispatchTouchEvent(e);
     }
 
@@ -655,14 +691,36 @@ public class MainActivity extends Activity {
     }
 
     private void setStandby(boolean on) {
+        boolean was = standbyOn;
         standbyOn = on;
-        standby.setVisibility(on ? View.VISIBLE : View.GONE);
+        standby.animate().cancel();
         if (on) {
+            hideQuickMenu();
             shiftStandby();
             styleStandby();
+            if (!was) {
+                standby.setAlpha(0f);
+                standby.setVisibility(View.VISIBLE);
+                standby.animate().alpha(1f).setDuration(700).start();
+            } else {
+                standby.setAlpha(1f);
+                standby.setVisibility(View.VISIBLE);
+            }
         } else {
+            hideQuickMenu();
             lastTouch = System.currentTimeMillis();
             applyBrightness();
+            if (was) {
+                Sounds.play(this, Sounds.WAKE);
+                standby.animate().alpha(0f).setDuration(280).withEndAction(new Runnable() {
+                    public void run() {
+                        if (!standbyOn) standby.setVisibility(View.GONE);
+                        standby.setAlpha(1f);
+                    }
+                }).start();
+            } else {
+                standby.setVisibility(View.GONE);
+            }
         }
     }
 
@@ -679,8 +737,9 @@ public class MainActivity extends Activity {
 
     /** Standby má vždy stejný vzhled (červený noční režim byl na přání vypnut). */
     private void styleStandby() {
-        standby.setBackgroundColor(Ui.BG_STANDBY);
-        sbFace.setStyle(StandbyFace.resolve(this)); // změna v nastavení / „každý den jiný“
+        standbyBg();
+        sbFace.setStyle(StandbyFace.resolve(this)); // změna v nastavení / střídání
+        updateAmbient();
         applyBrightness();
     }
 
@@ -760,7 +819,20 @@ public class MainActivity extends Activity {
         lastTouch = now;
         if (now - lastWave < 1000) return;
         lastWave = now;
-        if (standbyOn) setStandby(false);
+        if (standbyOn && quickMenu == null) wakeUp(StandbyFace.POKE_WAVE);
+    }
+
+    /** Probudit ze standby; Očička nejdřív zareagují (mávnutí, tlesknutí, dotek). */
+    private void wakeUp(int poke) {
+        if (sbFace.poke(poke)) {
+            h.postDelayed(new Runnable() {
+                public void run() {
+                    if (standbyOn && quickMenu == null) setStandby(false);
+                }
+            }, poke == StandbyFace.POKE_TOUCH ? 550 : 950);
+        } else {
+            setStandby(false);
+        }
     }
 
     /** Živé hodnoty pro nastavení. */
@@ -1056,6 +1128,7 @@ public class MainActivity extends Activity {
 
     private void updateMedia() {
         int vis = mc != null ? View.VISIBLE : View.GONE;
+        standbyBg();
         bPrev.setVisibility(vis);
         bPlay.setVisibility(vis);
         bNext.setVisibility(vis);
@@ -1165,6 +1238,209 @@ public class MainActivity extends Activity {
         }
         sbMediaIcon.setVisibility(b != null ? View.GONE : View.VISIBLE);
         mArtIcon.setVisibility(b != null ? View.GONE : View.VISIBLE);
+        artColor = Prefs.get(this).getBoolean("art_color", true) ? Ui.dominant(b) : 0;
+        standbyBg();
+    }
+
+    /** Pozadí standby: když hraje hudba s obalem, jemný přechod v jeho barvě a tlačítko play v ní. */
+    private void standbyBg() {
+        boolean tint = artColor != 0 && mc != null;
+        if (tint) {
+            android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                    new int[]{Ui.mix(Ui.BG_STANDBY, artColor, .32f), Ui.mix(Ui.BG_STANDBY, artColor, .1f), Ui.BG_STANDBY});
+            standby.setBackground(g);
+        } else {
+            standby.setBackgroundColor(Ui.BG_STANDBY);
+        }
+        int playBg = tint ? artColor : Ui.AMBER;
+        int playFg = tint ? (Ui.light(artColor) ? 0xFF111111 : Ui.INK) : Ui.ON_AMBER;
+        android.graphics.drawable.StateListDrawable st = new android.graphics.drawable.StateListDrawable();
+        st.addState(new int[]{android.R.attr.state_pressed}, Ui.circle(Ui.mix(playBg, 0xFFFFFFFF, .2f)));
+        st.addState(new int[]{}, Ui.circle(playBg));
+        sbPlay.setBackground(st);
+        Ui.tint((ImageView) sbPlay.getChildAt(0), playFg);
+    }
+
+    // ================================================================== barvy podle žárovky
+    private long lastAmbient;
+
+    private void updateAmbient() {
+        if (!Prefs.get(this).getBoolean("standby_ambient", false) || !Yeelight.configured(this)) {
+            sbFace.setAmbient(0);
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastAmbient < 50000) return;
+        lastAmbient = now;
+        Yeelight.state(this, new Yeelight.StateDone() {
+            public void done(Yeelight.State s) {
+                if (s == null || !s.on) {
+                    sbFace.setAmbient(0);
+                    return;
+                }
+                int c;
+                if (s.mode == 1) c = 0xFF000000 | s.rgb;
+                else if (s.ct < 3300) c = 0xFFF5A04A; // teplá bílá
+                else if (s.ct < 4800) c = 0xFFF2CF8E;
+                else c = 0xFFA9CBF2; // studená
+                // příliš tmavé / bílé barvy zesytit, ať je vzhled pořád barevný
+                float[] hsv = new float[3];
+                android.graphics.Color.colorToHSV(c, hsv);
+                hsv[1] = Math.max(.35f, hsv[1]);
+                hsv[2] = Math.max(.8f, hsv[2]);
+                sbFace.setAmbient(android.graphics.Color.HSVToColor(hsv));
+            }
+        });
+    }
+
+    // ================================================================== rychlé menu (podržení na standby)
+    private void showQuickMenu() {
+        if (quickMenu != null || !standbyOn) return;
+        Sounds.play(this, Sounds.MENU);
+        quickMenu = new FrameLayout(this);
+        quickMenu.setBackgroundColor(0xD9000000 | (Ui.BG_STANDBY & 0xFFFFFF));
+        quickMenu.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                hideQuickMenu();
+            }
+        });
+        LinearLayout row = Ui.box(this, false);
+        row.setGravity(Gravity.CENTER);
+        boolean radioOn = RadioService.nowUrl != null && mc != null;
+        quickItem(row, R.drawable.w_moon, "Vzhled", new Runnable() {
+            public void run() {
+                nextFace();
+            }
+        }, false);
+        quickItem(row, R.drawable.ic_bulb, "Světlo", new Runnable() {
+            public void run() {
+                toggleLight();
+                hideQuickMenu();
+            }
+        }, true);
+        quickItem(row, R.drawable.ic_alarm, "Budík za 8 h", new Runnable() {
+            public void run() {
+                quickAlarm(8 * 60);
+                hideQuickMenu();
+            }
+        }, true);
+        quickItem(row, radioOn ? R.drawable.ic_stop : R.drawable.ic_radio, radioOn ? "Vypnout rádio" : "Rádio",
+                new Runnable() {
+                    public void run() {
+                        quickRadio();
+                        hideQuickMenu();
+                    }
+                }, true);
+        quickMenu.addView(row, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
+        TextView hint = Ui.text(this, "klepni mimo pro zavření", .03f, Ui.DIM);
+        FrameLayout.LayoutParams hl = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        hl.bottomMargin = px(.06f);
+        quickMenu.addView(hint, hl);
+        quickMenu.setAlpha(0f);
+        standby.addView(quickMenu, new FrameLayout.LayoutParams(-1, -1));
+        quickMenu.animate().alpha(1f).setDuration(180).start();
+        h.removeCallbacks(hideMenu);
+        h.postDelayed(hideMenu, 8000);
+    }
+
+    private final Runnable hideMenu = new Runnable() {
+        public void run() {
+            hideQuickMenu();
+        }
+    };
+
+    private void hideQuickMenu() {
+        h.removeCallbacks(hideMenu);
+        if (quickMenu == null) return;
+        final View m = quickMenu;
+        quickMenu = null;
+        m.animate().alpha(0f).setDuration(150).withEndAction(new Runnable() {
+            public void run() {
+                if (m.getParent() != null) ((android.view.ViewGroup) m.getParent()).removeView(m);
+            }
+        }).start();
+    }
+
+    private void quickItem(LinearLayout row, int icon, String label, final Runnable r, boolean accent) {
+        LinearLayout col = Ui.box(this, true);
+        col.setGravity(Gravity.CENTER_HORIZONTAL);
+        LinearLayout b = Ui.roundButton(this, icon, accent ? Ui.INK : Ui.ON_AMBER, accent ? Ui.TILE_PRESSED : Ui.AMBER,
+                .2f, .085f);
+        b.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                h.removeCallbacks(hideMenu);
+                h.postDelayed(hideMenu, 8000);
+                r.run();
+            }
+        });
+        col.addView(b);
+        TextView t = Ui.text(this, label, .036f, Ui.SOFT);
+        col.addView(t, Ui.top(this, .02f));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(px(.36f), -2);
+        row.addView(col, lp);
+    }
+
+    /** Další vzhled z oblíbených (nebo ze všech); vypne automatické střídání. */
+    private void nextFace() {
+        int[] pool = StandbyFace.pool(this);
+        int cur = sbFace.getStyle(), idx = 0;
+        for (int i = 0; i < pool.length; i++) if (pool[i] == cur) idx = (i + 1) % pool.length;
+        int next = pool[idx];
+        Prefs.get(this).edit().putInt("standby_style", next).putInt("standby_rotate", 0).apply();
+        sbFace.setStyle(next);
+        android.widget.Toast.makeText(this, StandbyFace.NAMES[next], android.widget.Toast.LENGTH_SHORT).show();
+    }
+
+    /** Jednorázový budík za daný počet minut (zaokrouhleno na 5 min). */
+    private void quickAlarm(int minutes) {
+        Calendar c = Calendar.getInstance();
+        c.add(Calendar.MINUTE, minutes);
+        int m = (c.get(Calendar.MINUTE) + 2) / 5 * 5;
+        c.set(Calendar.MINUTE, 0);
+        c.add(Calendar.MINUTE, m);
+        java.util.List<Alarms.Alarm> list = Alarms.load(this);
+        Alarms.Alarm a = new Alarms.Alarm();
+        a.id = Alarms.newId(this);
+        a.hour = c.get(Calendar.HOUR_OF_DAY);
+        a.minute = c.get(Calendar.MINUTE);
+        a.days = 0;
+        a.on = true;
+        a.print = Prefs.get(this).getBoolean("last_print", true);
+        list.add(a);
+        Alarms.save(this, list);
+        Alarms.schedule(this);
+        updateAlarm();
+        android.widget.Toast.makeText(this, "Budík v " + a.timeText(), android.widget.Toast.LENGTH_LONG).show();
+    }
+
+    /** Rádio: hraje → vypnout; jinak stanice z nastavení budíku, nebo první oblíbená. */
+    private void quickRadio() {
+        if (RadioService.nowUrl != null && mc != null) {
+            RadioService.stop(this);
+            return;
+        }
+        android.content.SharedPreferences sp = Prefs.get(this);
+        String url = sp.getString("alarm_radio_url", ""), name = sp.getString("alarm_radio_name", ""),
+                fav = sp.getString("alarm_radio_favicon", "");
+        if (url.length() == 0) {
+            try {
+                org.json.JSONArray f = new org.json.JSONArray(getSharedPreferences("radio", MODE_PRIVATE)
+                        .getString("fav", "[]"));
+                if (f.length() > 0) {
+                    org.json.JSONObject o = f.getJSONObject(0);
+                    url = o.optString("url");
+                    name = o.optString("name");
+                    fav = o.optString("favicon", "");
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (url.length() == 0) {
+            startActivity(new Intent(this, RadioActivity.class));
+            return;
+        }
+        RadioService.play(this, name, url, fav);
     }
 
     private String appLabel(String pkg) {
