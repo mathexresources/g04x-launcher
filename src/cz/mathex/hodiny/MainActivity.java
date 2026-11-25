@@ -66,6 +66,8 @@ public class MainActivity extends Activity {
     // standby
     private FrameLayout standby;
     private StandbyFace sbFace;
+    private LinearLayout bOff, sbOff;
+    private String dismissedPkg; // vypnutý přehrávač – neukazovat, dokud znovu nezačne hrát
     private PatternView pattern;
     private int builtGen;
     private int artColor; // barva z obalu alba (0 = žádná)
@@ -268,9 +270,12 @@ public class MainActivity extends Activity {
         bPrev = Ui.roundButton(this, R.drawable.ic_prev, Ui.SOFT, 0, .092f, .052f);
         bPlay = Ui.roundButton(this, R.drawable.ic_play, Ui.ON_AMBER, Ui.AMBER, .117f, .052f);
         bNext = Ui.roundButton(this, R.drawable.ic_next, Ui.SOFT, 0, .092f, .052f);
+        bOff = Ui.roundButton(this, R.drawable.ic_power, Ui.DIM, 0, .092f, .046f);
+        bPrev.setVisibility(View.GONE); // na ploše místo „předchozí“ vypnutí (předchozí je ve standby)
         media.addView(bPrev);
         media.addView(bPlay);
         media.addView(bNext);
+        media.addView(bOff);
 
         dock = Ui.box(this, false);
         LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(px(.833f), -1);
@@ -339,6 +344,21 @@ public class MainActivity extends Activity {
         sbPlay.setOnClickListener(play);
         bNext.setOnClickListener(next);
         sbNext.setOnClickListener(next);
+        View.OnClickListener off = new View.OnClickListener() {
+            public void onClick(View v) {
+                stopMedia();
+            }
+        };
+        bOff.setOnClickListener(off);
+        sbOff.setOnClickListener(off);
+        View.OnLongClickListener offLong = new View.OnLongClickListener() {
+            public boolean onLongClick(View v) {
+                stopMedia();
+                return true;
+            }
+        };
+        bPlay.setOnLongClickListener(offLong);
+        sbPlay.setOnLongClickListener(offLong);
 
         msm = (MediaSessionManager) getSystemService(Context.MEDIA_SESSION_SERVICE);
         listener = new ComponentName(this, MediaListener.class);
@@ -493,6 +513,10 @@ public class MainActivity extends Activity {
         ppl.leftMargin = ppl.rightMargin = px(.04f);
         sbControls.addView(sbPlay, ppl);
         sbControls.addView(sbNext);
+        sbOff = Ui.roundButton(this, R.drawable.ic_power, Ui.DIM, 0, .11f, .055f);
+        LinearLayout.LayoutParams ol = new LinearLayout.LayoutParams(px(.11f), px(.11f));
+        ol.leftMargin = px(.03f);
+        sbControls.addView(sbOff, ol);
         info.addView(sbControls);
 
         standby.addView(sbMedia, new FrameLayout.LayoutParams(-1, -1));
@@ -1110,6 +1134,10 @@ public class MainActivity extends Activity {
         }
         MediaController best = null;
         for (MediaController m : list) {
+            if (m.getPackageName().equals(dismissedPkg)) {
+                if (!isPlaying(m)) continue; // vypnutý a pořád stojí → schovat
+                dismissedPkg = null; // znovu hraje → zase ukazovat
+            }
             if (best == null) best = m;
             if (isPlaying(m)) {
                 best = m;
@@ -1129,17 +1157,47 @@ public class MainActivity extends Activity {
         updateMedia();
     }
 
+    /** Vypnout přehrávání úplně: zastavit, schovat kartu a (jde-li to) ukončit aplikaci přehrávače. */
+    private void stopMedia() {
+        if (mc == null) return;
+        final String pkg = mc.getPackageName();
+        if (getPackageName().equals(pkg)) {
+            RadioService.stop(this);
+        } else {
+            MediaController.TransportControls tc = mc.getTransportControls();
+            tc.pause();
+            tc.stop();
+            dismissedPkg = pkg;
+            // až přehrávač po zastavení spadne do pozadí, ukončit ho, ať nevisí v paměti
+            h.postDelayed(new Runnable() {
+                public void run() {
+                    try {
+                        ((android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE)).killBackgroundProcesses(pkg);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }, 2500);
+        }
+        setController(null);
+        Sounds.play(this, Sounds.BACK);
+        android.widget.Toast.makeText(this, "Hudba vypnuta", android.widget.Toast.LENGTH_SHORT).show();
+    }
+
     private static boolean isPlaying(MediaController m) {
         PlaybackState s = m.getPlaybackState();
         return s != null && (s.getState() == PlaybackState.STATE_PLAYING || s.getState() == PlaybackState.STATE_BUFFERING);
     }
 
     private void updateMedia() {
+        if (mc != null && mc.getPackageName().equals(dismissedPkg) && !isPlaying(mc)) {
+            setController(null);
+            return;
+        }
         int vis = mc != null ? View.VISIBLE : View.GONE;
         standbyBg();
-        bPrev.setVisibility(vis);
         bPlay.setVisibility(vis);
         bNext.setVisibility(vis);
+        bOff.setVisibility(vis);
         sbMedia.setVisibility(vis);
         // plocha: když nic nehraje, karta přehrávání zmizí a dok se roztáhne přes celou šířku (větší ikony)
         mediaCard.setVisibility(vis);
@@ -1377,7 +1435,7 @@ public class MainActivity extends Activity {
         });
         LinearLayout row = Ui.box(this, false);
         row.setGravity(Gravity.CENTER);
-        boolean radioOn = RadioService.nowUrl != null && mc != null;
+        boolean radioOn = mc != null;
         quickItem(row, R.drawable.w_moon, "Vzhled", new Runnable() {
             public void run() {
                 nextFace();
@@ -1395,7 +1453,7 @@ public class MainActivity extends Activity {
                 hideQuickMenu();
             }
         }, true);
-        quickItem(row, radioOn ? R.drawable.ic_stop : R.drawable.ic_radio, radioOn ? "Vypnout rádio" : "Rádio",
+        quickItem(row, radioOn ? R.drawable.ic_power : R.drawable.ic_radio, radioOn ? "Vypnout hudbu" : "Rádio",
                 new Runnable() {
                     public void run() {
                         quickRadio();
@@ -1486,8 +1544,8 @@ public class MainActivity extends Activity {
 
     /** Rádio: hraje → vypnout; jinak stanice z nastavení budíku, nebo první oblíbená. */
     private void quickRadio() {
-        if (RadioService.nowUrl != null && mc != null) {
-            RadioService.stop(this);
+        if (mc != null) {
+            stopMedia();
             return;
         }
         android.content.SharedPreferences sp = Prefs.get(this);
