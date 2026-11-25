@@ -198,6 +198,11 @@ final class Yeelight {
         send(c, "set_rgb", new Object[]{rgb & 0xFFFFFF, "smooth", 300}, d);
     }
 
+    /** Zapne a nastaví teplotu bílé i jas jedním příkazem (předvolby). */
+    static void scene(Context c, int k, int b, Done d) {
+        send(c, "set_scene", new Object[]{"ct", Math.max(1700, Math.min(6500, k)), Math.max(1, Math.min(100, b))}, d);
+    }
+
     /** Zapne naplno studenou bílou (po vypnutí budíku). */
     static void full(Context c) {
         send(c, "set_scene", new Object[]{"ct", 5000, 100}, null);

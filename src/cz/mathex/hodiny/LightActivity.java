@@ -16,6 +16,11 @@ import org.json.JSONArray;
 
 /** Ovládání žárovky Yeelight / Mi LED: vypínač, jas, teplota bílé, barvy, svítání před budíkem. */
 public class LightActivity extends Activity {
+    /** Výchozí předvolby: název, teplota bílé (K), jas (%). Podržením se přepíšou aktuálním stavem. */
+    private static final String[] PRESET_NAMES = {"Bílá max", "Halogen", "Noční"};
+    private static final int[][] PRESET_DEFAULTS = {{5500, 100}, {2700, 60}, {1800, 5}};
+    private LinearLayout presets;
+
     private static final int[] COLORS = {0xFFB040, 0xFF6A2A, 0xFF2A2A, 0xFF3D9A, 0xA040FF, 0x3A6BFF, 0x2AC8C8, 0x40D060};
 
     private LinearLayout power, body, missing;
@@ -87,6 +92,13 @@ public class LightActivity extends Activity {
         tl.leftMargin = px(.05f);
         top.addView(tt, tl);
         body.addView(top);
+
+        // předvolby
+        presets = Ui.box(this, false);
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, px(.2f));
+        pl.topMargin = px(.04f);
+        body.addView(presets, pl);
+        renderPresets();
 
         // jas – celá dlaždice je posuvník
         bright = new BigSlider(this, "Jas", 1, 100, Ui.AMBER, null);
@@ -180,6 +192,64 @@ public class LightActivity extends Activity {
         if (now - lastSend < 250) return false;
         lastSend = now;
         return true;
+    }
+
+    private int[] preset(int i) {
+        android.content.SharedPreferences p = Prefs.get(this);
+        return new int[]{p.getInt("preset" + i + "_k", PRESET_DEFAULTS[i][0]), p.getInt("preset" + i + "_b", PRESET_DEFAULTS[i][1])};
+    }
+
+    /** Barva náhledu předvolby podle teploty bílé. */
+    private static int ctColor(int k) {
+        if (k <= 2200) return 0xFFFF9A3C;
+        if (k <= 3200) return 0xFFFFC46B;
+        if (k <= 4500) return 0xFFFFE6C0;
+        return 0xFFF2F6FF;
+    }
+
+    private void renderPresets() {
+        presets.removeAllViews();
+        for (int i = 0; i < PRESET_NAMES.length; i++) {
+            final int idx = i;
+            final int[] v = preset(i);
+            LinearLayout t = Ui.box(this, true);
+            t.setGravity(Gravity.CENTER_VERTICAL);
+            t.setBackground(Ui.tile(this));
+            t.setPadding(px(.04f), 0, px(.03f), 0);
+            LinearLayout head = Ui.box(this, false);
+            head.setGravity(Gravity.CENTER_VERTICAL);
+            View dot = new View(this);
+            dot.setBackground(Ui.circle(ctColor(v[0])));
+            head.addView(dot, new LinearLayout.LayoutParams(px(.05f), px(.05f)));
+            TextView n = Ui.text(this, PRESET_NAMES[i], .046f, Ui.INK);
+            n.setTypeface(Ui.medium());
+            head.addView(n, Ui.left(this, .02f));
+            t.addView(head);
+            t.addView(Ui.text(this, v[0] + " K · " + v[1] + " %", .035f, Ui.DIM), Ui.top(this, .012f));
+            t.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View x) {
+                    int[] p = preset(idx);
+                    Yeelight.scene(LightActivity.this, p[0], p[1], new Yeelight.Done() {
+                        public void done(boolean ok, JSONArray r) {
+                            if (!ok) fail();
+                            else refresh();
+                        }
+                    });
+                }
+            });
+            t.setOnLongClickListener(new View.OnLongClickListener() {
+                public boolean onLongClick(View x) {
+                    int k = Math.round(ct.getValue() / 100f) * 100, b = bright.getValue();
+                    Prefs.get(LightActivity.this).edit().putInt("preset" + idx + "_k", k).putInt("preset" + idx + "_b", b).apply();
+                    Toast.makeText(LightActivity.this, "„" + PRESET_NAMES[idx] + "“ uloženo: " + k + " K · " + b + " %", Toast.LENGTH_SHORT).show();
+                    renderPresets();
+                    return true;
+                }
+            });
+            LinearLayout.LayoutParams lp = Ui.lp(0, -1, 1f);
+            if (i > 0) lp.leftMargin = px(.03f);
+            presets.addView(t, lp);
+        }
     }
 
     private void show(boolean configured) {
