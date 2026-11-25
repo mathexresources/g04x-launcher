@@ -10,6 +10,10 @@ import java.util.List;
 public class AlarmReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context c, Intent i) {
+        if ("cz.mathex.hodiny.SUNRISE".equals(i.getAction())) {
+            Yeelight.sunrise(c, Alarms.SUNRISE_MIN * 60);
+            return;
+        }
         if (!"cz.mathex.hodiny.FIRE".equals(i.getAction())) {
             Alarms.schedule(c);
             return;

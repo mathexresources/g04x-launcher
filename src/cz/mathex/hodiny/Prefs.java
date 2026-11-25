@@ -185,6 +185,13 @@ final class Prefs {
         });
         box.addView(test);
 
+        box.addView(label(a, "IP žárovky Yeelight / Mi LED (prázdné = najít automaticky)"));
+        final EditText bulb = new EditText(a);
+        bulb.setSingleLine(true);
+        bulb.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        bulb.setText(get(a).getString("bulb_ip", ""));
+        box.addView(bulb);
+
         final android.widget.CheckBox clap = new android.widget.CheckBox(a);
         clap.setText("👏  Tlesknutí 2× = pauza / přehrát hudbu (mikrofon)");
         clap.setChecked(clapEnabled(a));
@@ -225,7 +232,9 @@ final class Prefs {
                         if (!u.startsWith("http")) u = "http://" + u;
                         get(a).edit().putString("printer", u)
                                 .putString("api_token", token.getText().toString().trim())
-                                .putBoolean("clap", clap.isChecked()).apply();
+                                .putBoolean("clap", clap.isChecked())
+                                .putString("bulb_ip", bulb.getText().toString().trim()).apply();
+                        Alarms.schedule(a);
                         if (clap.isChecked() && a.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                                 != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                             a.requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO}, 7);

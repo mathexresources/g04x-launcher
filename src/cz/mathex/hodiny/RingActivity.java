@@ -192,6 +192,7 @@ public class RingActivity extends Activity {
         Alarms.schedule(this);
         Alarms.Alarm a = Alarms.find(Alarms.load(this), alarmId);
         if (a != null && a.print) Prefs.printMorning(this, true); // výsledek ukáže toast
+        if (Yeelight.configured(this) && Prefs.get(this).getBoolean("bulb_full_on_dismiss", true)) Yeelight.full(this);
         finishRing();
     }
 

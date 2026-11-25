@@ -21,6 +21,7 @@ final class Alarms {
     static final String[] DAY_NAMES = {"Po", "Út", "St", "Čt", "Pá", "So", "Ne"};
     static final int SNOOZE_MIN = 9;
     static final int SNOOZE_ID = -1;
+    static final int SUNRISE_MIN = 10;
 
     static final class Alarm {
         int id, hour, minute, days; // days: bit 0 = pondělí … bit 6 = neděle, 0 = jednorázový
@@ -158,6 +159,16 @@ final class Alarms {
         }
         AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
         Intent fire = new Intent(c, AlarmReceiver.class).setAction("cz.mathex.hodiny.FIRE");
+        // svítání: 10 min před skutečným budíkem (ne před odložením) pomalu rozsvítit žárovku
+        Intent sun = new Intent(c, AlarmReceiver.class).setAction("cz.mathex.hodiny.SUNRISE");
+        PendingIntent sunPi = PendingIntent.getBroadcast(c, 2, sun, PendingIntent.FLAG_UPDATE_CURRENT);
+        long sunAt = best - SUNRISE_MIN * 60000L;
+        if (best > 0 && bestId != SNOOZE_ID && sunAt > now && Yeelight.configured(c)
+                && Prefs.get(c).getBoolean("bulb_sunrise", true)) {
+            am.setExact(AlarmManager.RTC_WAKEUP, sunAt, sunPi);
+        } else {
+            am.cancel(sunPi);
+        }
         if (best < 0) {
             am.cancel(PendingIntent.getBroadcast(c, 0, fire, PendingIntent.FLAG_UPDATE_CURRENT));
             return;

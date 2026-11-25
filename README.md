@@ -54,6 +54,11 @@ Space Grotesk numerals, system Roboto text (sharper than Inter on the 480p panel
 - **Internet radio** (📻 tile): most-played Czech stations from [radio-browser.info](https://www.radio-browser.info),
   search, ★ favourites; plays in a foreground service with its own MediaSession, so the music card, standby controls
   and ⏮/⏭ (switch between favourites) work like with Spotify. Pauses for the alarm and resumes after. Much lighter than Spotify.
+- **Smart bulb** (Yeelight / Mi LED Smart Bulb White and Color) over the LAN, no cloud: 💡 in the dock = toggle,
+  long-press = light screen (power, brightness, white temperature 1700–6500 K, colours). **Sunrise**: 10 min before
+  an alarm the bulb slowly fades in from dim warm to bright daylight; after stopping the alarm it goes full on.
+  Requires "LAN Control" enabled for the bulb in the Yeelight app (same Xiaomi account and region); the bulb is found
+  automatically (SSDP) or its IP can be entered in ⚙ Settings.
 - **Weather** from [wttr.in](https://wttr.in) (no API key): current temp, condition, min/max, rain chance,
   next hours. Default location is Prague (by coordinates); tap = refresh, long-press = settings.
 - **Music card** for whatever is playing (Spotify, SoundCloud, …) via Android MediaSession.
@@ -411,6 +416,8 @@ src/cz/mathex/hodiny/
   UpdateReceiver.java   install result / confirmation dialog
   MediaListener.java    empty NotificationListenerService (needed for MediaSession access)
   ClapDetector.java     double-clap detection from the microphone (loudness only)
+  Yeelight.java         Yeelight LAN protocol (SSDP discovery, JSON over TCP 55443)
+  LightActivity.java    bulb control screen
   Ui.java               "Ember" colours, fonts, icons, sizes, helpers
 assets/fonts/           Space Grotesk (static Latin-Ext subsets, SIL OFL – licence included)
 res/drawable/           vector icons

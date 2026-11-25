@@ -61,6 +61,7 @@ public class MainActivity extends Activity {
     private TextView mTitle, mSub;
     private ImageView mArtIcon;
     private LinearLayout bPrev, bPlay, bNext;
+    private android.widget.ImageView bulbIcon;
 
     // standby
     private FrameLayout standby;
@@ -274,6 +275,17 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(MainActivity.this, RadioActivity.class));
             }
         });
+        bulbIcon = dockTile(dock, R.drawable.ic_bulb, Ui.INK, new Runnable() {
+            public void run() {
+                toggleLight();
+            }
+        });
+        ((View) bulbIcon.getParent()).setOnLongClickListener(new View.OnLongClickListener() {
+            public boolean onLongClick(View v) {
+                startActivity(new Intent(MainActivity.this, LightActivity.class));
+                return true;
+            }
+        });
         dockTile(dock, R.drawable.ic_printer, Ui.INK, new Runnable() {
             public void run() {
                 startActivity(new Intent(MainActivity.this, PrinterActivity.class));
@@ -318,19 +330,52 @@ public class MainActivity extends Activity {
         Alarms.schedule(this);
     }
 
-    private void dockTile(LinearLayout dock, int icon, int color, final Runnable action) {
+    private android.widget.ImageView dockTile(LinearLayout dock, int icon, int color, final Runnable action) {
         LinearLayout t = Ui.box(this, false);
         t.setGravity(Gravity.CENTER);
         t.setBackground(Ui.tile(this));
-        t.addView(Ui.icon(this, icon, color, .075f));
+        android.widget.ImageView iv = Ui.icon(this, icon, color, .07f);
+        t.addView(iv);
         t.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 action.run();
             }
         });
         LinearLayout.LayoutParams p = Ui.lp(0, -1, 1f);
-        if (dock.getChildCount() > 0) p.leftMargin = px(.021f);
+        if (dock.getChildCount() > 0) p.leftMargin = px(.017f);
         dock.addView(t, p);
+        return iv;
+    }
+
+    // ================================================================== světlo (Yeelight)
+    /** Krátký stisk 💡 = zapnout/vypnout, podržení = obrazovka světla. */
+    private void toggleLight() {
+        if (!Yeelight.configured(this)) {
+            startActivity(new Intent(this, LightActivity.class));
+            return;
+        }
+        Yeelight.toggle(this, new Yeelight.Done() {
+            public void done(boolean ok, org.json.JSONArray r) {
+                if (!ok) android.widget.Toast.makeText(MainActivity.this, "Žárovka neodpovídá", android.widget.Toast.LENGTH_SHORT).show();
+                h.postDelayed(new Runnable() {
+                    public void run() {
+                        updateBulb();
+                    }
+                }, 500);
+            }
+        });
+    }
+
+    private void updateBulb() {
+        if (!Yeelight.configured(this)) {
+            Ui.tint(bulbIcon, Ui.DIM);
+            return;
+        }
+        Yeelight.state(this, new Yeelight.StateDone() {
+            public void done(Yeelight.State s) {
+                Ui.tint(bulbIcon, s == null ? Ui.DIM : s.on ? Ui.AMBER : Ui.INK);
+            }
+        });
     }
 
     private void buildStandby(FrameLayout root) {
@@ -454,6 +499,7 @@ public class MainActivity extends Activity {
         startSensors();
         startClap();
         loadToday(false);
+        updateBulb();
     }
 
     /** Dvojí tlesknutí – jen když je zapnuté v nastavení a je povolený mikrofon. */
