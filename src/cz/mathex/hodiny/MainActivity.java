@@ -376,6 +376,8 @@ public class MainActivity extends Activity {
                 h.postDelayed(new Runnable() {
                     public void run() {
                         updateBulb();
+                        lastAmbient = 0;
+                        updateAmbient();
                     }
                 }, 500);
             }
@@ -558,6 +560,8 @@ public class MainActivity extends Activity {
         }
         pattern.setKind(Prefs.get(this).getInt("home_pattern", 0));
         sbFace.setStyle(StandbyFace.resolve(this));
+        lastAmbient = 0; // po návratu ze světla / nastavení načíst barvu hned
+        updateAmbient();
         Ui.immersive(this);
         lastTouch = System.currentTimeMillis();
         if (System.currentTimeMillis() - Prefs.get(this).getLong("weather_ts", 0) > WEATHER_EVERY) loadWeather();
@@ -672,6 +676,10 @@ public class MainActivity extends Activity {
             }
             if (now - Prefs.get(MainActivity.this).getLong("weather_ts", 0) > WEATHER_EVERY) loadWeather();
             if (!standbyOn && hasWindowFocus() && now - lastTouch > STANDBY_IDLE) setStandby(true);
+            if (standbyOn) {
+                updateAmbient(); // sama se omezí na jednou za 8 s
+                if (c.get(Calendar.SECOND) % 3 == 0) checkArt();
+            }
             h.postDelayed(this, 1000);
         }
     };
@@ -1242,24 +1250,73 @@ public class MainActivity extends Activity {
         standbyBg();
     }
 
-    /** Pozadí standby: když hraje hudba s obalem, jemný přechod v jeho barvě a tlačítko play v ní. */
+    private int ambientColor; // barva žárovky (0 = nepoužívat / zhasnuto)
+    private int bgShown = 0; // barva, ve které je pozadí právě vykreslené
+    private android.animation.ValueAnimator bgAnim;
+
+    /**
+     * Pozadí standby: hraje hudba s obalem → jemný přechod v barvě obalu (a play v ní),
+     * jinak v barvě žárovky (když je zapnuté „Barvy podle žárovky“). Změna se plynule prolne.
+     */
     private void standbyBg() {
-        boolean tint = artColor != 0 && mc != null;
-        if (tint) {
-            android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable(
-                    android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                    new int[]{Ui.mix(Ui.BG_STANDBY, artColor, .32f), Ui.mix(Ui.BG_STANDBY, artColor, .1f), Ui.BG_STANDBY});
-            standby.setBackground(g);
+        boolean art = artColor != 0 && mc != null;
+        int target = art ? artColor : ambientColor;
+        if (target != bgShown) {
+            final int from = bgShown, to = target;
+            if (bgAnim != null) bgAnim.cancel();
+            bgAnim = android.animation.ValueAnimator.ofFloat(0f, 1f);
+            bgAnim.setDuration(900);
+            bgAnim.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener() {
+                public void onAnimationUpdate(android.animation.ValueAnimator va) {
+                    float t = (Float) va.getAnimatedValue();
+                    paintBg(from == 0 && to == 0 ? 0 : Ui.mix(from == 0 ? Ui.BG_STANDBY : from,
+                            to == 0 ? Ui.BG_STANDBY : to, t), from == 0 ? t : to == 0 ? 1 - t : 1);
+                }
+            });
+            bgShown = target;
+            bgAnim.start();
         } else {
-            standby.setBackgroundColor(Ui.BG_STANDBY);
+            paintBg(target, target == 0 ? 0 : 1);
         }
-        int playBg = tint ? artColor : Ui.AMBER;
-        int playFg = tint ? (Ui.light(artColor) ? 0xFF111111 : Ui.INK) : Ui.ON_AMBER;
+        int playBg = art ? artColor : Ui.AMBER;
+        int playFg = art ? (Ui.light(artColor) ? 0xFF111111 : Ui.INK) : Ui.ON_AMBER;
         android.graphics.drawable.StateListDrawable st = new android.graphics.drawable.StateListDrawable();
         st.addState(new int[]{android.R.attr.state_pressed}, Ui.circle(Ui.mix(playBg, 0xFFFFFFFF, .2f)));
         st.addState(new int[]{}, Ui.circle(playBg));
         sbPlay.setBackground(st);
         Ui.tint((ImageView) sbPlay.getChildAt(0), playFg);
+    }
+
+    /** strength 0..1 = jak moc je barva vidět (pro prolnutí z / do čisté tmy). */
+    private void paintBg(int color, float strength) {
+        if (color == 0 || strength <= 0) {
+            standby.setBackgroundColor(Ui.BG_STANDBY);
+            return;
+        }
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                new int[]{Ui.mix(Ui.BG_STANDBY, color, .32f * strength), Ui.mix(Ui.BG_STANDBY, color, .1f * strength),
+                        Ui.BG_STANDBY});
+        standby.setBackground(g);
+    }
+
+    /** Pojistka: obal mohl změnit i bez zprávy od přehrávače → občas porovnat s aktuálními metadaty. */
+    private Object lastArtKey;
+
+    private void checkArt() {
+        if (mc == null) return;
+        MediaMetadata md = mc.getMetadata();
+        Object key = null;
+        if (md != null) {
+            key = md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
+            if (key == null) key = md.getBitmap(MediaMetadata.METADATA_KEY_ART);
+            if (key == null) key = md.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI);
+            if (key == null) key = md.getString(MediaMetadata.METADATA_KEY_ART_URI);
+            if (key == null) key = md.getString(MediaMetadata.METADATA_KEY_TITLE);
+        }
+        if (key == lastArtKey || (key != null && key.equals(lastArtKey))) return;
+        lastArtKey = key;
+        updateMedia();
     }
 
     // ================================================================== barvy podle žárovky
@@ -1268,15 +1325,23 @@ public class MainActivity extends Activity {
     private void updateAmbient() {
         if (!Prefs.get(this).getBoolean("standby_ambient", false) || !Yeelight.configured(this)) {
             sbFace.setAmbient(0);
+            if (ambientColor != 0) {
+                ambientColor = 0;
+                standbyBg();
+            }
             return;
         }
         long now = System.currentTimeMillis();
-        if (now - lastAmbient < 50000) return;
+        if (now - lastAmbient < 8000) return;
         lastAmbient = now;
         Yeelight.state(this, new Yeelight.StateDone() {
             public void done(Yeelight.State s) {
                 if (s == null || !s.on) {
                     sbFace.setAmbient(0);
+                    if (ambientColor != 0) {
+                        ambientColor = 0;
+                        standbyBg();
+                    }
                     return;
                 }
                 int c;
@@ -1289,7 +1354,12 @@ public class MainActivity extends Activity {
                 android.graphics.Color.colorToHSV(c, hsv);
                 hsv[1] = Math.max(.35f, hsv[1]);
                 hsv[2] = Math.max(.8f, hsv[2]);
-                sbFace.setAmbient(android.graphics.Color.HSVToColor(hsv));
+                int amb = android.graphics.Color.HSVToColor(hsv);
+                sbFace.setAmbient(amb);
+                if (amb != ambientColor) {
+                    ambientColor = amb;
+                    standbyBg();
+                }
             }
         });
     }

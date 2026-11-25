@@ -371,7 +371,7 @@ public class SettingsActivity extends BaseActivity {
 
         heading("Barvy");
         toggle("Barvy podle žárovky", "standby_ambient", false, null);
-        note("Láva, Bauhaus, Memphis a Pop art převezmou barvu, kterou svítí žárovka.");
+        note("Pozadí standby se jemně zabarví podle žárovky a Láva, Bauhaus, Memphis a Pop art převezmou její barvu. Při hudbě má přednost barva obalu.");
         toggle("Standby v barvě obalu alba", "art_color", true, null);
 
         heading("Pozadí plochy");
