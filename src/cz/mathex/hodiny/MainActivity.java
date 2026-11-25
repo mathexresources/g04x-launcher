@@ -60,7 +60,7 @@ public class MainActivity extends Activity {
     private LinearLayout alarmPill, chips, hours;
     private TextView mTitle, mSub;
     private ImageView mArtIcon;
-    private LinearLayout bPrev, bPlay, bNext;
+    private LinearLayout bPrev, bPlay, bNext, mediaCard, dock;
     private android.widget.ImageView bulbIcon;
 
     // standby
@@ -213,6 +213,7 @@ public class MainActivity extends Activity {
         main.addView(bottom, bl);
 
         LinearLayout media = Ui.box(this, false);
+        mediaCard = media;
         media.setGravity(Gravity.CENTER_VERTICAL);
         media.setBackground(Ui.tile(this));
         media.setPadding(px(.025f), 0, px(.02f), 0);
@@ -256,7 +257,7 @@ public class MainActivity extends Activity {
         media.addView(bPlay);
         media.addView(bNext);
 
-        LinearLayout dock = Ui.box(this, false);
+        dock = Ui.box(this, false);
         LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(px(.833f), -1);
         dl.leftMargin = px(.025f);
         bottom.addView(dock, dl);
@@ -1045,6 +1046,19 @@ public class MainActivity extends Activity {
         bPlay.setVisibility(vis);
         bNext.setVisibility(vis);
         sbMedia.setVisibility(vis);
+        // plocha: když nic nehraje, karta přehrávání zmizí a dok se roztáhne přes celou šířku (větší ikony)
+        mediaCard.setVisibility(vis);
+        LinearLayout.LayoutParams dl = (LinearLayout.LayoutParams) dock.getLayoutParams();
+        if (mc != null) {
+            dl.width = px(.833f);
+            dl.weight = 0;
+            dl.leftMargin = px(.025f);
+        } else {
+            dl.width = 0;
+            dl.weight = 1;
+            dl.leftMargin = 0;
+        }
+        dock.setLayoutParams(dl);
         // standby: když něco hraje, je hlavní prvek přehrávání; jinak velký čas uprostřed
         sbCenter.setVisibility(mc != null ? View.GONE : View.VISIBLE);
         sbClock.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, Ui.base(this) * .58f);
