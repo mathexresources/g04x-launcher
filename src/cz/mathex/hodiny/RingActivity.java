@@ -78,7 +78,8 @@ public class RingActivity extends Activity {
         snoozeB.setBackground(Ui.tile(this, Ui.TILE, .058f));
         TextView st = Ui.text(this, "Odložit", .054f, Ui.INK);
         st.setTypeface(Ui.medium());
-        snoozeB.addView(st);
+        st.setGravity(Gravity.CENTER);
+        snoozeB.addView(st, new LinearLayout.LayoutParams(-2, -2));
         snoozeB.addView(Ui.text(this, "o " + Alarms.SNOOZE_MIN + " minut", .031f, Ui.DIM), Ui.top(this, .01f));
         snoozeB.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
