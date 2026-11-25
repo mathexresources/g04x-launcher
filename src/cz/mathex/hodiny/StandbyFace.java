@@ -25,8 +25,11 @@ import java.util.TimeZone;
  * pohledu – stejná třída tak slouží i jako malý náhled v nastavení.
  */
 public class StandbyFace extends View {
-    static final int CLASSIC = 0, ANALOG = 1, FLIP = 2, WORDS = 3, SUN = 4, DOTS = 5;
-    static final String[] NAMES = {"Klasický", "Ručičky", "Překlápěcí", "Slovy", "Slunce", "Tečky"};
+    static final int CLASSIC = 0, ANALOG = 1, FLIP = 2, WORDS = 3, SUN = 4, DOTS = 5,
+            EYES = 6, LAVA = 7, WATER = 8, ORBIT = 9, BAUHAUS = 10;
+    static final String[] NAMES = {"Klasický", "Ručičky", "Překlápěcí", "Slovy", "Slunce", "Tečky",
+            "Očička", "Láva", "Hladina", "Planety", "Bauhaus"};
+    private static final int CORAL = 0xFFE8735E, VIOLET = 0xFF9A88F2;
     static final int COUNT = NAMES.length;
 
     private static final Locale CS = new Locale("cs", "CZ");
@@ -38,6 +41,9 @@ public class StandbyFace extends View {
     private final TextPaint tp = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rf = new RectF();
     private Drawable alarmIcon;
+    private int frameMs = 50; // animované vzhledy ~20 fps (náhledy pomaleji)
+    private final android.graphics.Path path = new android.graphics.Path();
+    private final java.util.Random rnd = new java.util.Random();
 
     // překlápění
     private String flipShown = "", flipOld = "";
@@ -70,6 +76,11 @@ public class StandbyFace extends View {
         style = s;
         wordsKey = "";
         invalidate();
+    }
+
+    /** Malý náhled v nastavení – animace stačí pomaleji. */
+    void setPreview(boolean on) {
+        frameMs = on ? 120 : 50;
     }
 
     int getStyle() {
@@ -116,8 +127,31 @@ public class StandbyFace extends View {
             case WORDS: words(c, now); break;
             case SUN: sun(c, now); break;
             case DOTS: dots(c, now); break;
+            case EYES: eyes(c, now); break;
+            case LAVA: lava(c, now); break;
+            case WATER: water(c, now); break;
+            case ORBIT: orbit(c, now); break;
+            case BAUHAUS: bauhaus(c, now); break;
             default: classic(c, now); break;
         }
+        if (style == EYES || style == LAVA || style == WATER || style == ORBIT) postInvalidateDelayed(frameMs);
+    }
+
+    private static float secs() {
+        return (SystemClock.uptimeMillis() % 3600000L) / 1000f;
+    }
+
+    private void bigTime(Canvas c, String t, float cx, float cy, float size, int color) {
+        p.setShader(null);
+        p.setStyle(Paint.Style.FILL);
+        p.setTypeface(Ui.display());
+        p.setTextSize(size);
+        p.setColor(color);
+        p.setTextAlign(Paint.Align.CENTER);
+        p.setLetterSpacing(-0.04f);
+        Paint.FontMetrics fm = p.getFontMetrics();
+        c.drawText(t, cx, cy - (fm.ascent + fm.descent) / 2, p);
+        p.setLetterSpacing(0);
     }
 
     private static String two(int n) {
@@ -543,5 +577,297 @@ public class StandbyFace extends View {
         }
         text(c, dateLine(now), W / 2, H * .1f, H * .046f, Ui.DIM, Ui.regular(), Paint.Align.CENTER);
         alarm(c, W / 2, H * .92f, H * .046f, Paint.Align.CENTER);
+    }
+
+    // ------------------------------------------------------------------ 6 očička
+    private float lookX, lookY, lookTX, lookTY;
+    private long nextLook, blinkAt;
+
+    private void eyes(Canvas c, Calendar now) {
+        float W = getWidth(), H = getHeight();
+        long ms = SystemClock.uptimeMillis();
+        if (ms > nextLook) {
+            // občas se podívá na čas dole, jinak kamkoli
+            if (rnd.nextInt(4) == 0) { lookTX = 0; lookTY = .9f; }
+            else { lookTX = rnd.nextFloat() * 2 - 1; lookTY = rnd.nextFloat() * 1.6f - .8f; }
+            nextLook = ms + 1500 + rnd.nextInt(3500);
+        }
+        lookX += (lookTX - lookX) * .18f;
+        lookY += (lookTY - lookY) * .18f;
+        if (blinkAt == 0 || ms > blinkAt + 2000) blinkAt = ms + 2500 + rnd.nextInt(4500);
+        float blink = 0;
+        long bd = ms - blinkAt;
+        if (bd >= 0 && bd < 220) blink = (float) Math.sin(Math.PI * bd / 220.0);
+        int hr = now.get(Calendar.HOUR_OF_DAY);
+        float sleepy = hr >= 22 || hr < 6 ? .42f : 0f; // v noci ospalá víčka
+        float lid = Math.max(blink, sleepy);
+
+        float rx = Math.min(H * .2f, W * .15f), ry = rx * 1.18f, ey = H * .4f;
+        for (int i = 0; i < 2; i++) {
+            float ex = W / 2 + (i == 0 ? -1 : 1) * rx * 1.35f;
+            rf.set(ex - rx, ey - ry, ex + rx, ey + ry);
+            c.save();
+            path.reset();
+            path.addOval(rf, android.graphics.Path.Direction.CW);
+            c.clipPath(path);
+            p.setShader(null);
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(Ui.INK);
+            c.drawOval(rf, p);
+            float px0 = ex + lookX * rx * .42f, py0 = ey + lookY * ry * .4f;
+            p.setColor(Ui.TEAL);
+            c.drawCircle(px0, py0, rx * .52f, p);
+            p.setColor(Ui.BG_STANDBY);
+            c.drawCircle(px0, py0, rx * .3f, p);
+            p.setColor(Ui.INK);
+            c.drawCircle(px0 - rx * .14f, py0 - rx * .16f, rx * .1f, p);
+            if (lid > 0) {
+                p.setColor(Ui.TILE);
+                float ly = ey - ry + 2 * ry * lid;
+                c.drawRect(ex - rx, ey - ry, ex + rx, ly, p);
+                p.setColor(Ui.AMBER);
+                c.drawRect(ex - rx, ly - H * .008f, ex + rx, ly, p);
+            }
+            c.restore();
+        }
+        bigTime(c, time(now), W / 2, H * .8f, H * .16f, Ui.SOFT);
+        alarm(c, W / 2, H * .93f, H * .042f, Paint.Align.CENTER);
+        if (sleepy > 0) {
+            float t = secs() % 3f / 3f;
+            text(c, "z", W / 2 + rx * 2.6f + t * H * .06f, ey - ry - t * H * .12f, H * (.04f + t * .03f),
+                    (int) (0xFF * (1 - t)) << 24 | 0x9AA3AE, Ui.medium(), Paint.Align.CENTER);
+        }
+    }
+
+    // ------------------------------------------------------------------ 7 láva
+    private static final float[][] BLOBS = { // fáze, rychlost, poloměr
+            {0f, .11f, .55f}, {1.7f, .08f, .45f}, {3.1f, .13f, .38f}, {4.4f, .07f, .6f}, {5.6f, .1f, .34f},
+            {2.4f, .09f, .42f}};
+    private static final int[] LAVA_C = {Ui.AMBER, Ui.TEAL, CORAL, VIOLET, Ui.AMBER, CORAL};
+
+    private void lava(Canvas c, Calendar now) {
+        float W = getWidth(), H = getHeight(), t = secs();
+        int shift = now.get(Calendar.HOUR_OF_DAY); // barvy se každou hodinu prohodí
+        p.setStyle(Paint.Style.FILL);
+        for (int i = 0; i < BLOBS.length; i++) {
+            float[] b = BLOBS[i];
+            float x = W * (.5f + .42f * (float) Math.sin(t * b[1] + b[0]));
+            float y = H * (.5f + .45f * (float) Math.sin(t * b[1] * .73f + b[0] * 1.3f));
+            float r = H * b[2] * (1 + .12f * (float) Math.sin(t * .5f + i));
+            int col = LAVA_C[(i + shift) % LAVA_C.length];
+            p.setShader(new android.graphics.RadialGradient(x, y, r,
+                    new int[]{(0x70 << 24) | (col & 0xFFFFFF), (0x30 << 24) | (col & 0xFFFFFF), col & 0xFFFFFF},
+                    new float[]{0f, .55f, 1f}, android.graphics.Shader.TileMode.CLAMP));
+            c.drawCircle(x, y, r, p);
+        }
+        p.setShader(null);
+        String tm = time(now);
+        float size = fit(tm, H * .5f, W * .9f, Ui.display(), -0.04f);
+        bigTime(c, tm, W / 2 + H * .006f, H * .5f + H * .01f, size, 0x88000000);
+        bigTime(c, tm, W / 2, H * .5f, size, Ui.INK);
+        text(c, dateLine(now), W / 2, H * .12f, H * .046f, Ui.SOFT, Ui.regular(), Paint.Align.CENTER);
+        alarm(c, W / 2, H * .88f, H * .048f, Paint.Align.CENTER);
+    }
+
+    // ------------------------------------------------------------------ 8 hladina
+    private void water(Canvas c, Calendar now) {
+        float W = getWidth(), H = getHeight(), t = secs();
+        float frac = (now.get(Calendar.MINUTE) + now.get(Calendar.SECOND) / 60f) / 60f; // za hodinu se nádoba naplní
+        float top = H * (.94f - .8f * frac);
+        float amp = H * .018f;
+        // zadní vlna
+        wave(top - amp * .6f, amp, .016f / (H / 480f), t * 1.3f + 2f, W, H);
+        p.setShader(null);
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(0xFF173B3A);
+        c.drawPath(path, p);
+        // přední vlna
+        wave(top, amp, .012f / (H / 480f), -t * 1.8f, W, H);
+        p.setColor(0xFF2A7570);
+        c.drawPath(path, p);
+
+        String tm = time(now);
+        float size = fit(tm, H * .46f, W * .86f, Ui.display(), -0.04f);
+        bigTime(c, tm, W / 2, H * .5f, size, Ui.INK);
+        c.save();
+        c.clipPath(path);
+        bigTime(c, tm, W / 2, H * .5f, size, Ui.BG_STANDBY);
+        // bublinky
+        p.setColor(0x55EEF1F4);
+        for (int i = 0; i < 7; i++) {
+            float bx = W * ((i * .137f + .07f) % 1f);
+            float speed = H * (.05f + (i % 3) * .025f);
+            float by = H - ((t * speed + i * H * .29f) % (H - top + H * .05f));
+            c.drawCircle(bx + (float) Math.sin(t * 2 + i) * H * .01f, by, H * (.006f + (i % 3) * .003f), p);
+        }
+        c.restore();
+        text(c, dateLine(now), W * .05f, H * .08f, H * .042f, Ui.DIM, Ui.regular(), Paint.Align.LEFT);
+        alarm(c, W * .95f, H * .08f, H * .042f, Paint.Align.RIGHT);
+    }
+
+    private void wave(float top, float amp, float k, float ph, float W, float H) {
+        path.reset();
+        path.moveTo(0, H);
+        float step = Math.max(4f, W / 100f);
+        for (float x = 0; x <= W + step; x += step) {
+            float y = top + amp * (float) Math.sin(x * k + ph) + amp * .4f * (float) Math.sin(x * k * 2.3f - ph * .7f);
+            path.lineTo(x, y);
+        }
+        path.lineTo(W, H);
+        path.close();
+    }
+
+    // ------------------------------------------------------------------ 9 planety
+    private void orbit(Canvas c, Calendar now) {
+        float W = getWidth(), H = getHeight();
+        float ms = now.get(Calendar.MILLISECOND) / 1000f;
+        float sec = now.get(Calendar.SECOND) + ms;
+        float min = now.get(Calendar.MINUTE) + sec / 60f;
+        float hr = now.get(Calendar.HOUR) + min / 60f;
+        float R3 = H * .46f, R1 = H * .33f, R2 = H * .1f;
+        float cx = W - W * .04f - R3, cy = H / 2;
+
+        p.setShader(null);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(Math.max(1f, H * .004f));
+        p.setColor(Ui.LINE);
+        c.drawCircle(cx, cy, R1, p);
+        c.drawCircle(cx, cy, R3, p);
+        p.setStyle(Paint.Style.FILL);
+        for (int i = 0; i < 12; i++) {
+            double a = Math.PI * 2 * i / 12;
+            p.setColor(i % 3 == 0 ? Ui.FAINT : Ui.LINE);
+            c.drawCircle(cx + (float) Math.sin(a) * R1, cy - (float) Math.cos(a) * R1, H * (i % 3 == 0 ? .009f : .006f), p);
+        }
+        // slunce
+        for (int i = 3; i >= 1; i--) {
+            p.setColor((0x12 * (4 - i)) << 24 | 0xF5B54A);
+            c.drawCircle(cx, cy, H * .06f * (1 + i * .5f), p);
+        }
+        p.setColor(Ui.AMBER);
+        c.drawCircle(cx, cy, H * .06f, p);
+        // hodinová planeta + minutový měsíc
+        double ah = Math.PI * 2 * hr / 12;
+        float hx = cx + (float) Math.sin(ah) * R1, hy = cy - (float) Math.cos(ah) * R1;
+        p.setStyle(Paint.Style.STROKE);
+        p.setColor(0x336CC6C0);
+        c.drawCircle(hx, hy, R2, p);
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(Ui.TEAL);
+        c.drawCircle(hx, hy, H * .045f, p);
+        double am = Math.PI * 2 * min / 60;
+        p.setColor(Ui.INK);
+        c.drawCircle(hx + (float) Math.sin(am) * R2, hy - (float) Math.cos(am) * R2, H * .02f, p);
+        // vteřinová kometa s ohonem
+        for (int i = 14; i >= 0; i--) {
+            double as = Math.PI * 2 * (sec - i * .25f) / 60;
+            int alpha = (int) (0xFF * (1 - i / 15f) * (i == 0 ? 1 : .5f));
+            p.setColor(alpha << 24 | 0xF5B54A);
+            c.drawCircle(cx + (float) Math.sin(as) * R3, cy - (float) Math.cos(as) * R3,
+                    H * (.016f - i * .0008f), p);
+        }
+        // text vlevo
+        float x = W * .06f, colW = cx - R3 - x - W * .03f;
+        String tm = time(now);
+        text(c, tm, x, H * .42f, fit(tm, H * .2f, colW, Ui.display(), 0), Ui.INK, Ui.display(), Paint.Align.LEFT);
+        String day = new SimpleDateFormat("EEEE", CS).format(now.getTime());
+        String date = new SimpleDateFormat("d. MMMM", CS).format(now.getTime());
+        text(c, day, x, H * .58f, fit(day, H * .055f, colW, Ui.medium(), 0), Ui.SOFT, Ui.medium(), Paint.Align.LEFT);
+        text(c, date, x, H * .66f, fit(date, H * .045f, colW, Ui.regular(), 0), Ui.DIM, Ui.regular(), Paint.Align.LEFT);
+        alarm(c, x, H * .8f, Math.min(H * .042f, colW / 9f), Paint.Align.LEFT);
+    }
+
+    // ------------------------------------------------------------------ 10 bauhaus
+    private static final int[] BAU_C = {Ui.AMBER, Ui.TEAL, CORAL, VIOLET};
+
+    private void bauhaus(Canvas c, Calendar now) {
+        float W = getWidth(), H = getHeight();
+        int hh = now.get(Calendar.HOUR_OF_DAY), mm = now.get(Calendar.MINUTE);
+        String d = two(hh) + two(mm);
+        float ch = H * .56f, cw = ch * .72f, gap = H * .03f, colon = H * .12f;
+        float total = 4 * cw + 2 * gap + colon;
+        if (total > W * .94f) {
+            float k = W * .94f / total;
+            ch *= k; cw *= k; gap *= k; colon *= k; total *= k;
+        }
+        float x = (W - total) / 2, y = H * .5f - ch / 2;
+        for (int i = 0; i < 4; i++) {
+            int v = d.charAt(i) - '0';
+            p.setShader(null);
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(Ui.TILE);
+            c.drawRect(x, y, x + cw, y + ch, p);
+            shape(v, i, x, y, cw, ch);
+            int col = BAU_C[(v + i + hh) % BAU_C.length];
+            p.setColor(col);
+            c.drawPath(path, p);
+            // číslice: světlá mimo tvar, tmavá uvnitř tvaru
+            p.setTypeface(Ui.medium());
+            p.setTextSize(ch * .78f);
+            p.setTextAlign(Paint.Align.CENTER);
+            Paint.FontMetrics fm = p.getFontMetrics();
+            float by = y + ch / 2 - (fm.ascent + fm.descent) / 2;
+            p.setColor(Ui.INK);
+            c.drawText(String.valueOf(v), x + cw / 2, by, p);
+            c.save();
+            c.clipPath(path);
+            p.setColor(Ui.BG_STANDBY);
+            c.drawText(String.valueOf(v), x + cw / 2, by, p);
+            c.restore();
+            x += cw + (i == 1 ? colon : gap);
+            if (i == 1) {
+                float s = colon * .32f, mx = x - colon / 2;
+                p.setColor(Ui.INK);
+                c.drawRect(mx - s / 2, y + ch * .3f - s / 2, mx + s / 2, y + ch * .3f + s / 2, p);
+                p.setColor(Ui.AMBER);
+                c.drawCircle(mx, y + ch * .7f, s / 2, p);
+            }
+        }
+        // vteřiny jako pruh barevných dílků
+        int ss = now.get(Calendar.SECOND);
+        float bw = total / 60f, by = y + ch + H * .05f;
+        for (int i = 0; i < 60; i++) {
+            p.setColor(i <= ss ? BAU_C[(i / 15) % 4] : 0x14FFFFFF);
+            c.drawRect((W - total) / 2 + i * bw, by, (W - total) / 2 + (i + 1) * bw - Math.max(1f, bw * .25f),
+                    by + H * .018f, p);
+        }
+        text(c, dateLine(now).toUpperCase(CS), W / 2, H * .1f, H * .04f, Ui.DIM, Ui.medium(), Paint.Align.CENTER);
+        alarm(c, W / 2, H * .92f, H * .044f, Paint.Align.CENTER);
+    }
+
+    /** Geometrický tvar dlaždice podle číslice (kruh, půlkruh, čtvrtkruh, trojúhelník, kosočtverec…). */
+    private void shape(int v, int pos, float x, float y, float w, float h) {
+        path.reset();
+        float m = Math.min(w, h);
+        switch ((v + pos * 3) % 6) {
+            case 0: path.addCircle(x + w / 2, y + h / 2, m * .46f, android.graphics.Path.Direction.CW); break;
+            case 1:
+                rf.set(x, y + h - w / 2, x + w, y + h + w / 2);
+                path.addArc(rf, 180, 180);
+                path.close();
+                break;
+            case 2:
+                rf.set(x - w, y - w, x + w, y + w);
+                path.moveTo(x, y);
+                path.arcTo(rf, 0, 90);
+                path.close();
+                break;
+            case 3:
+                path.moveTo(x, y + h);
+                path.lineTo(x + w, y + h);
+                path.lineTo(x + w / 2, y + h * .3f);
+                path.close();
+                break;
+            case 4:
+                path.moveTo(x + w / 2, y + h * .12f);
+                path.lineTo(x + w, y + h / 2);
+                path.lineTo(x + w / 2, y + h * .88f);
+                path.lineTo(x, y + h / 2);
+                path.close();
+                break;
+            default:
+                path.addRect(x, y + h * .5f, x + w, y + h, android.graphics.Path.Direction.CW);
+                break;
+        }
     }
 }

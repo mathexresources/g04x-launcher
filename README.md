@@ -47,7 +47,10 @@ Space Grotesk numerals, system Roboto text (sharper than Inter on the 480p panel
 - **Standby** after 15 s without touch. Nothing playing: date, huge time and the alarm (with countdown).
   Six looks to pick from in Settings → Standby (live previews): *Classic*, *Hands* (analog with a seconds hand),
   *Flip* (animated flip cards), *Words* (Czech "skoro čtvrt na jedenáct"), *Sun* (sun / moon travelling over the
-  horizon, sunrise & sunset times) and *Dots* (LED matrix with a seconds row) – or a different one every day.
+  horizon, sunrise & sunset times), *Dots* (LED matrix with a seconds row), and the abstract ones: *Eyes* (two eyes
+  that look around, blink and get sleepy at night), *Lava* (drifting colour blobs), *Water* (the screen fills up
+  over the hour, the time is cut out of the water), *Planets* (hour planet, minute moon, seconds comet) and
+  *Bauhaus* (each digit on its own geometric tile) – or a different one every day.
   Something playing: the music becomes the main element – big cover art (Spotify album art, radio station logo),
   title, artist and large ⏮ ⏯ ⏭ that work without waking the screen; time, date and alarm move to a small line on top.
   Any touch outside the controls wakes it (the first touch never launches anything).

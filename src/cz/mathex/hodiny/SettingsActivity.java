@@ -272,6 +272,7 @@ public class SettingsActivity extends BaseActivity {
             frame.setPadding(pad, pad, pad, pad);
             StandbyFace face = new StandbyFace(this);
             face.setStyle(i);
+            face.setPreview(true);
             face.setAlarm("6:30", "· za 7 h");
             frame.addView(face, new android.widget.FrameLayout.LayoutParams(-1, -1));
             tile.addView(frame, new LinearLayout.LayoutParams(tileW, prevH));
