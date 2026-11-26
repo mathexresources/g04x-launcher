@@ -574,7 +574,7 @@ public class SettingsActivity extends BaseActivity {
         });
         note("Hudbu pak pouštíš z aplikace Spotify v mobilu nebo PC: ikona zařízení → „"
                 + sp.getString("spotify_name", "Hodiny") + "“. Musí být ve stejné Wi-Fi a potřebuješ Spotify Premium. "
-                + "Hodiny nemusí spouštět celou aplikaci Spotify, takže je to mnohem rychlejší.");
+                + "Po prvním připojení jde hudbu pouštět i přímo z hodin – tlačítko ♪ v doku otevře tvoje playlisty, alba a interprety.");
         field("Název zařízení", sp.getString("spotify_name", "Hodiny"), "Hodiny",
                 android.text.InputType.TYPE_CLASS_TEXT, new Saver() {
                     public void save(String v) {

@@ -95,7 +95,8 @@ Space Grotesk numerals, system Roboto text (sharper than Inter on the 480p panel
   [go-librespot](https://github.com/devgianlu/go-librespot) built as a static armv7 binary (`connect/build.sh`:
   pure-Go Vorbis decoder, no cgo, DNS passed from Android) and bundled as `lib/armeabi-v7a/libgolibrespot.so`;
   PCM comes over stdout into an AudioTrack, and a MediaSession mirrors its API so the now-playing card, standby,
-  colours and party mode work as usual.
+  colours and party mode work as usual. The ♪ dock tile opens your library (playlists, albums, artists, Liked
+  Songs) to start playback right from the clock.
 - **Claps**: 2× toggles the light, 3× play/pause.
 - **Easter egg** – long-press the now-playing card (home) or the cover (standby): party mode. The Yeelight follows
   the beat from the microphone (music mode, no rate limit), colour cycles or strobe, and the screen turns into a

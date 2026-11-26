@@ -308,10 +308,7 @@ public class MainActivity extends Activity {
         android.widget.ImageView musicIcon = dockTile(dock, R.drawable.ic_music, Ui.INK, new Runnable() {
             public void run() {
                 if (SpotifyService.enabled(MainActivity.this) && SpotifyService.available(MainActivity.this)) {
-                    // Connect: hudba se pouští z mobilu; aplikace Spotify jen podržením
-                    android.widget.Toast.makeText(MainActivity.this,
-                            "Spotify v mobilu → ikona zařízení → „" + Prefs.get(MainActivity.this).getString("spotify_name", "Hodiny")
-                                    + "“\n(podržením otevřeš aplikaci Spotify)", android.widget.Toast.LENGTH_LONG).show();
+                    startActivity(new Intent(MainActivity.this, SpotifyActivity.class)); // knihovna přes Connect
                 } else {
                     Ui.launch(MainActivity.this, SPOTIFY, "Spotify");
                 }
