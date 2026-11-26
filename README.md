@@ -90,6 +90,13 @@ Space Grotesk numerals, system Roboto text (sharper than Inter on the 480p panel
   tinted by the album cover, a subtle home-screen background pattern, soft generated UI sounds (quiet at night).
   Standby fades in/out, rings ripple across it on the full hour, the Eyes react to a wave, a clap or a touch, and
   the ringing screen pulses. **Long-press on standby** opens a quick menu: next look, light, alarm in 8 h, radio.
+- **Spotify Connect** (Settings → Spotify): the clock shows up as a speaker "Hodiny" in the Spotify app on your
+  phone/PC (Premium needed) – much lighter than running the Spotify app on 1 GB RAM. Inside runs
+  [go-librespot](https://github.com/devgianlu/go-librespot) built as a static armv7 binary (`connect/build.sh`:
+  pure-Go Vorbis decoder, no cgo, DNS passed from Android) and bundled as `lib/armeabi-v7a/libgolibrespot.so`;
+  PCM comes over stdout into an AudioTrack, and a MediaSession mirrors its API so the now-playing card, standby,
+  colours and party mode work as usual.
+- **Claps**: 2× toggles the light, 3× play/pause.
 - **Easter egg** – long-press the now-playing card (home) or the cover (standby): party mode. The Yeelight follows
   the beat from the microphone (music mode, no rate limit), colour cycles or strobe, and the screen turns into a
   retro car-radio LCD with jumping dolphins, an equalizer and a scrolling title, all in the bulb's colour.

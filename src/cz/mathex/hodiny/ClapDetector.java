@@ -7,12 +7,13 @@ import android.os.Handler;
 import android.os.Looper;
 
 /**
- * Detekce dvojího tlesknutí z mikrofonu. Zvuk se nikam neukládá ani neposílá – počítá se jen hlasitost
+ * Detekce série tlesknutí (2× / 3×) z mikrofonu. Zvuk se nikam neukládá ani neposílá – počítá se jen hlasitost
  * po 32ms blocích: tlesknutí = krátká ostrá špička nad hlukem pozadí, dvojí = dvě špičky 0,2–0,8 s po sobě.
  */
 final class ClapDetector {
     interface Listener {
-        void onDoubleClap();
+        /** Série tlesknutí skončila: count = 2 nebo 3 (víc se počítá jako 3). */
+        void onClaps(int count);
     }
 
     private static final int RATE = 16000;
@@ -58,7 +59,7 @@ final class ClapDetector {
             short[] buf = new short[BLOCK];
             double bg = 300; // hladina hluku pozadí (RMS), pomalu se přizpůsobuje
             long lastClap = 0, cooldownUntil = 0;
-            int loudBlocks = 0;
+            int loudBlocks = 0, count = 0;
             while (running) {
                 int n = rec.read(buf, 0, BLOCK);
                 if (n <= 0) continue;
@@ -73,6 +74,19 @@ final class ClapDetector {
                 lastBg = (int) bg;
                 lastPeak = peak;
                 long now = System.currentTimeMillis();
+                // série skončila: od posledního tlesknutí uběhlo 0,9 s bez dalšího
+                if (count > 0 && now - lastClap > 900) {
+                    final int c = Math.min(3, count);
+                    count = 0;
+                    if (c >= 2) {
+                        cooldownUntil = now + 1200;
+                        main.post(new Runnable() {
+                            public void run() {
+                                listener.onClaps(c);
+                            }
+                        });
+                    }
+                }
                 // citlivější: nižší absolutní práh i poměr k pozadí (v2.9: 9000 a ×5)
                 boolean loud = peak > 5500 && rms > bg * 3.5;
                 if (loud) {
@@ -81,17 +95,12 @@ final class ClapDetector {
                     // tlesknutí je krátké: nejvýš 3 hlasité bloky (~96 ms, i s ozvěnou); delší zvuk (hudba, řeč) se ignoruje
                     if (loudBlocks >= 1 && loudBlocks <= 3 && now > cooldownUntil) {
                         long gap = now - lastClap;
-                        if (gap > 150 && gap < 1000) {
-                            lastClap = 0;
-                            cooldownUntil = now + 1500;
-                            main.post(new Runnable() {
-                                public void run() {
-                                    listener.onDoubleClap();
-                                }
-                            });
-                        } else {
-                            lastClap = now;
+                        if (count > 0 && gap > 150 && gap <= 900) {
+                            count++; // další tlesknutí v sérii
+                        } else if (count == 0 || gap > 900) {
+                            count = 1; // začátek nové série
                         }
+                        if (gap > 150) lastClap = now;
                     }
                     loudBlocks = 0;
                     bg = bg + (rms - bg) * 0.02; // pozadí se učí jen z tichých bloků

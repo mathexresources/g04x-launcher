@@ -127,6 +127,15 @@ final class Prefs {
         });
     }
 
+    static byte[] readAll(java.io.InputStream in) throws java.io.IOException {
+        java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+        byte[] b = new byte[8192];
+        int n;
+        while ((n = in.read(b)) > 0) bo.write(b, 0, n);
+        in.close();
+        return bo.toByteArray();
+    }
+
     static String http(String url) throws Exception {
         HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
         con.setConnectTimeout(10000);

@@ -3,3 +3,5 @@ build/
 *.keystore
 *.jks
 *.idsig
+connect/out/
+connect/build/

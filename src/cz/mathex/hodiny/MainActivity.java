@@ -305,9 +305,22 @@ public class MainActivity extends Activity {
                 showAlarms();
             }
         });
-        dockTile(dock, R.drawable.ic_music, Ui.INK, new Runnable() {
+        android.widget.ImageView musicIcon = dockTile(dock, R.drawable.ic_music, Ui.INK, new Runnable() {
             public void run() {
+                if (SpotifyService.enabled(MainActivity.this) && SpotifyService.available(MainActivity.this)) {
+                    // Connect: hudba se pouští z mobilu; aplikace Spotify jen podržením
+                    android.widget.Toast.makeText(MainActivity.this,
+                            "Spotify v mobilu → ikona zařízení → „" + Prefs.get(MainActivity.this).getString("spotify_name", "Hodiny")
+                                    + "“\n(podržením otevřeš aplikaci Spotify)", android.widget.Toast.LENGTH_LONG).show();
+                } else {
+                    Ui.launch(MainActivity.this, SPOTIFY, "Spotify");
+                }
+            }
+        });
+        ((View) musicIcon.getParent()).setOnLongClickListener(new View.OnLongClickListener() {
+            public boolean onLongClick(View v) {
                 Ui.launch(MainActivity.this, SPOTIFY, "Spotify");
+                return true;
             }
         });
         dockTile(dock, R.drawable.ic_radio, Ui.TEAL, new Runnable() {
@@ -568,21 +581,26 @@ public class MainActivity extends Activity {
         updateBulb();
     }
 
-    /** Dvojí tlesknutí – jen když je zapnuté v nastavení a je povolený mikrofon. */
+    /** Tlesknutí (2× světlo, 3× play/pauza) – jen když je zapnuté v nastavení a je povolený mikrofon. */
     private void startClap() {
         if (clap != null) clap.stop();
         clap = null;
         if (!Prefs.clapEnabled(this)) return;
         if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return;
         clap = new ClapDetector(new ClapDetector.Listener() {
-            public void onDoubleClap() {
-                if (mc != null) {
-                    if (isPlaying(mc)) mc.getTransportControls().pause();
-                    else mc.getTransportControls().play();
-                } else if (standbyOn) {
-                    wakeUp(StandbyFace.POKE_CLAP);
+            public void onClaps(int count) {
+                if (standbyOn && sbFace.poke(StandbyFace.POKE_CLAP)) { /* Očička se leknou, ale nebudí */ }
+                if (count == 2) { // 2× = světlo
+                    if (Yeelight.configured(MainActivity.this)) toggleLight();
+                    android.widget.Toast.makeText(MainActivity.this, "👏👏  světlo", android.widget.Toast.LENGTH_SHORT).show();
+                } else { // 3× = play / pauza
+                    if (mc != null) {
+                        if (isPlaying(mc)) mc.getTransportControls().pause();
+                        else mc.getTransportControls().play();
+                    }
+                    android.widget.Toast.makeText(MainActivity.this, "👏👏👏  " + (mc == null ? "nic nehraje"
+                            : isPlaying(mc) ? "pauza" : "hraje"), android.widget.Toast.LENGTH_SHORT).show();
                 }
-                android.widget.Toast.makeText(MainActivity.this, "👏👏", android.widget.Toast.LENGTH_SHORT).show();
             }
         });
         clap.start();
@@ -1182,7 +1200,9 @@ public class MainActivity extends Activity {
     private void stopMedia() {
         if (mc == null) return;
         final String pkg = mc.getPackageName();
-        if (getPackageName().equals(pkg)) {
+        if (SpotifyService.owns(mc)) { // Spotify Connect: jen pauza a schovat (přijímač běží dál)
+            mc.getTransportControls().stop();
+        } else if (getPackageName().equals(pkg)) {
             RadioService.stop(this);
         } else {
             MediaController.TransportControls tc = mc.getTransportControls();
@@ -1248,7 +1268,7 @@ public class MainActivity extends Activity {
             }
             return;
         }
-        boolean radio = getPackageName().equals(mc.getPackageName());
+        boolean radio = getPackageName().equals(mc.getPackageName()) && !SpotifyService.owns(mc);
         int artRes = radio ? R.drawable.ic_radio : R.drawable.ic_music;
         mArtIcon.setImageResource(artRes);
         sbMediaIcon.setImageResource(artRes);

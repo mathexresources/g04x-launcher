@@ -23,6 +23,10 @@ public class App extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        try {
+            SpotifyService.sync(this); // Spotify Connect přijímač, pokud je zapnutý
+        } catch (Exception ignored) {
+        }
         final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             public void uncaughtException(Thread t, Throwable e) {

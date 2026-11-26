@@ -22,8 +22,8 @@ import org.json.JSONArray;
  * Nastavení na celou obrazovku: vlevo sekce, vpravo jejich obsah. Ukládá se hned (bez tlačítka Uložit).
  */
 public class SettingsActivity extends BaseActivity {
-    private static final String[] SECTIONS = {"Vzhled", "Budík", "Počasí", "Tiskárna", "Světlo", "Mikrofon", "Systém"};
-    private static final int[] ICONS = {R.drawable.w_moon, R.drawable.ic_alarm, R.drawable.w_partly, R.drawable.ic_printer, R.drawable.ic_bulb,
+    private static final String[] SECTIONS = {"Vzhled", "Budík", "Spotify", "Počasí", "Tiskárna", "Světlo", "Mikrofon", "Systém"};
+    private static final int[] ICONS = {R.drawable.w_moon, R.drawable.ic_alarm, R.drawable.ic_music, R.drawable.w_partly, R.drawable.ic_printer, R.drawable.ic_bulb,
             R.drawable.ic_music, R.drawable.ic_settings};
 
     private final Handler h = new Handler(Looper.getMainLooper());
@@ -97,8 +97,8 @@ public class SettingsActivity extends BaseActivity {
                     render();
                 }
             });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, px(.094f));
-            if (i > 0) lp.topMargin = px(.006f);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, px(.084f));
+            if (i > 0) lp.topMargin = px(.005f);
             nav.addView(item, lp);
         }
         final int keepY = section == renderedSection ? sv.getScrollY() : 0;
@@ -112,10 +112,11 @@ public class SettingsActivity extends BaseActivity {
         switch (section) {
             case 0: standby(); break;
             case 1: alarm(); break;
-            case 2: weather(); break;
-            case 3: printer(); break;
-            case 4: light(); break;
-            case 5: mic(); break;
+            case 2: spotify(); break;
+            case 3: weather(); break;
+            case 4: printer(); break;
+            case 5: light(); break;
+            case 6: mic(); break;
             default: system(); break;
         }
     }
@@ -540,7 +541,7 @@ public class SettingsActivity extends BaseActivity {
 
     private void mic() {
         heading("Mikrofon");
-        toggle("Tlesknutí 2× = pauza / přehrát", "clap", false, new Runnable() {
+        toggle("Tleskání: 2× světlo, 3× pauza / přehrát", "clap", false, new Runnable() {
             public void run() {
                 if (Prefs.clapEnabled(SettingsActivity.this) && checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                         != PackageManager.PERMISSION_GRANTED) {
@@ -555,6 +556,64 @@ public class SettingsActivity extends BaseActivity {
                         + "\n(tlesknutí musí mít špičku nad 5500)");
             }
         });
+    }
+
+    // ------------------------------------------------------------------ spotify connect
+    private void spotify() {
+        final android.content.SharedPreferences sp = Prefs.get(this);
+        heading("Spotify Connect");
+        if (!SpotifyService.available(this)) {
+            note("V této verzi aplikace chybí přijímač Spotify Connect.");
+            return;
+        }
+        toggle("Hodiny jako Spotify reproduktor", "spotify_connect", false, new Runnable() {
+            public void run() {
+                SpotifyService.sync(SettingsActivity.this);
+                render();
+            }
+        });
+        note("Hudbu pak pouštíš z aplikace Spotify v mobilu nebo PC: ikona zařízení → „"
+                + sp.getString("spotify_name", "Hodiny") + "“. Musí být ve stejné Wi-Fi a potřebuješ Spotify Premium. "
+                + "Hodiny nemusí spouštět celou aplikaci Spotify, takže je to mnohem rychlejší.");
+        field("Název zařízení", sp.getString("spotify_name", "Hodiny"), "Hodiny",
+                android.text.InputType.TYPE_CLASS_TEXT, new Saver() {
+                    public void save(String v) {
+                        sp.edit().putString("spotify_name", v.trim().length() == 0 ? "Hodiny" : v.trim()).apply();
+                        SpotifyService.restart(SettingsActivity.this);
+                    }
+                });
+        TextView l = Ui.text(this, "Kvalita", .034f, Ui.DIM);
+        l.setPadding(0, px(.03f), 0, 0);
+        content.addView(l);
+        final int[] rates = {96, 160, 320};
+        int cur = sp.getInt("spotify_bitrate", 160), sel = 1;
+        for (int i = 0; i < 3; i++) if (rates[i] == cur) sel = i;
+        choices(new String[]{"Úsporná", "Normální", "Vysoká"}, sel, new Pick() {
+            public void pick(int i) {
+                sp.edit().putInt("spotify_bitrate", rates[i]).apply();
+                SpotifyService.restart(SettingsActivity.this);
+                render();
+            }
+        });
+        if (SpotifyService.enabled(this)) {
+            action("Restartovat přijímač", Ui.TILE, new Runnable() {
+                public void run() {
+                    SpotifyService.restart(SettingsActivity.this);
+                    Toast.makeText(SettingsActivity.this, "Restartuji…", Toast.LENGTH_SHORT).show();
+                }
+            });
+            action("Odhlásit účet", Ui.TILE, new Runnable() {
+                public void run() {
+                    SpotifyService.logout(SettingsActivity.this);
+                    Toast.makeText(SettingsActivity.this, "Odhlášeno – připoj se znovu z mobilu", Toast.LENGTH_SHORT).show();
+                }
+            });
+            liveText(new Runnable() {
+                public void run() {
+                    live.setText("stav: " + SpotifyService.status + "\n\n" + SpotifyService.logTail(12));
+                }
+            });
+        }
     }
 
     private void system() {

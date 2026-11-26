@@ -11,6 +11,12 @@ javac -source 8 -target 8 -encoding UTF-8 -Xlint:-options -bootclasspath "$JAR" 
       -d build/classes $(find src build/gen -name '*.java')
 dalvik-exchange --dex --output=build/classes.dex build/classes
 (cd build && aapt add unsigned.apk classes.dex >/dev/null)
+# Spotify Connect přijímač (connect/build.sh) jako nativní knihovna – když chybí, APK je bez něj
+if [ -f connect/out/libgolibrespot.so ]; then
+  mkdir -p build/native/lib/armeabi-v7a
+  cp connect/out/libgolibrespot.so build/native/lib/armeabi-v7a/
+  (cd build/native && aapt add ../unsigned.apk lib/armeabi-v7a/libgolibrespot.so >/dev/null)
+fi
 zipalign -f 4 build/unsigned.apk build/aligned.apk
 
 # stejný klíč = aktualizace přes `adb install -r` bez odinstalace
