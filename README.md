@@ -90,6 +90,9 @@ Space Grotesk numerals, system Roboto text (sharper than Inter on the 480p panel
   tinted by the album cover, a subtle home-screen background pattern, soft generated UI sounds (quiet at night).
   Standby fades in/out, rings ripple across it on the full hour, the Eyes react to a wave, a clap or a touch, and
   the ringing screen pulses. **Long-press on standby** opens a quick menu: next look, light, alarm in 8 h, radio.
+- **Easter egg** – long-press the now-playing card (home) or the cover (standby): party mode. The Yeelight follows
+  the beat from the microphone (music mode, no rate limit), colour cycles or strobe, and the screen turns into a
+  retro car-radio LCD with jumping dolphins, an equalizer and a scrolling title, all in the bulb's colour.
 - **Radio after the alarm**: Settings → Budík → pick a ★ favourite station that starts when you press Stop.
 - **Settings** on a full screen: sections on the left (weather, printer, light, microphone, system), saved instantly.
 - Secondary screens (alarms, radio, light, printer, settings…) return to the home screen in standby after 30 s idle.

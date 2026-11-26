@@ -73,12 +73,24 @@ public class MainActivity extends Activity {
     private int artColor; // barva z obalu alba (0 = žádná)
     private FrameLayout quickMenu;
     private boolean longFired;
+    private boolean downOnArt;
     private final Runnable longPress = new Runnable() {
         public void run() {
             longFired = true;
-            showQuickMenu();
+            if (downOnArt && mc != null) {
+                swallowTouch = true;
+                startParty();
+            } else {
+                showQuickMenu();
+            }
         }
     };
+
+    /** Tajný párty mód: podržení karty s tím, co hraje. */
+    private void startParty() {
+        Sounds.play(this, Sounds.MENU);
+        startActivity(new Intent(this, PartyActivity.class));
+    }
     private LinearLayout sbCenter, sbMedia, sbAlarm, sbPrev, sbPlay, sbNext;
     private TextView sbDate, sbClock, sbAlarmTime, sbAlarmLeft, sbTitle, sbSub, sbHint;
     private ImageView sbAlarmIcon, sbMediaIcon, sbArtImg, mArtImg;
@@ -234,6 +246,13 @@ public class MainActivity extends Activity {
         media.setGravity(Gravity.CENTER_VERTICAL);
         media.setBackground(Ui.tile(this));
         media.setPadding(px(.025f), 0, px(.02f), 0);
+        media.setOnLongClickListener(new View.OnLongClickListener() {
+            public boolean onLongClick(View v) {
+                if (mc == null) return false;
+                startParty();
+                return true;
+            }
+        });
         media.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 openPlayer();
@@ -419,6 +438,7 @@ public class MainActivity extends Activity {
     private void buildStandby(FrameLayout root) {
         standby = new FrameLayout(this);
         standby.setBackgroundColor(Ui.BG_STANDBY);
+        standby.setClickable(true); // dotyky ve standby nikdy nepropadnou na plochu pod ním
 
         sbCenter = Ui.box(this, true);
         sbCenter.setGravity(Gravity.CENTER);
@@ -636,7 +656,7 @@ public class MainActivity extends Activity {
     }
 
     private static boolean inside(View v, MotionEvent e) {
-        if (v.getVisibility() != View.VISIBLE) return false;
+        if (!v.isShown()) return false; // i když je skrytý rodič (přehrávač ve standby)
         int[] loc = new int[2];
         v.getLocationOnScreen(loc);
         float x = e.getRawX(), y = e.getRawY();
@@ -660,7 +680,8 @@ public class MainActivity extends Activity {
                 // krátký dotek = probudit, podržení = rychlé menu
                 swallowTouch = true;
                 longFired = false;
-                h.postDelayed(longPress, 550);
+                downOnArt = inside(sbArtBox, e) || inside(sbTitle, e);
+                h.postDelayed(longPress, downOnArt ? 800 : 550);
             }
             // dotek na ovládání hudby projde a standby zůstane
         }
