@@ -67,6 +67,7 @@ public class MainActivity extends Activity {
     private FrameLayout standby;
     private StandbyFace sbFace;
     private LinearLayout bOff, sbOff;
+    private View musicTile, radioTile; // schovají se, když totéž hraje v kartě přehrávání
     private String dismissedPkg; // vypnutý přehrávač – neukazovat, dokud znovu nezačne hrát
     private PatternView pattern;
     private int builtGen;
@@ -314,17 +315,18 @@ public class MainActivity extends Activity {
                 }
             }
         });
-        ((View) musicIcon.getParent()).setOnLongClickListener(new View.OnLongClickListener() {
+        musicTile = (View) musicIcon.getParent();
+        musicTile.setOnLongClickListener(new View.OnLongClickListener() {
             public boolean onLongClick(View v) {
                 Ui.launch(MainActivity.this, SPOTIFY, "Spotify");
                 return true;
             }
         });
-        dockTile(dock, R.drawable.ic_radio, Ui.TEAL, new Runnable() {
+        radioTile = (View) dockTile(dock, R.drawable.ic_radio, Ui.TEAL, new Runnable() {
             public void run() {
                 startActivity(new Intent(MainActivity.this, RadioActivity.class));
             }
-        });
+        }).getParent();
         bulbIcon = dockTile(dock, R.drawable.ic_bulb, Ui.INK, new Runnable() {
             public void run() {
                 toggleLight();
@@ -1239,9 +1241,15 @@ public class MainActivity extends Activity {
         sbMedia.setVisibility(vis);
         // plocha: když nic nehraje, karta přehrávání zmizí a dok se roztáhne přes celou šířku (větší ikony)
         mediaCard.setVisibility(vis);
+        // co hraje → stejné tlačítko v doku je zbytečné (otevře se kartou přehrávání)
+        boolean spotifyPlays = mc != null && (SpotifyService.owns(mc) || SPOTIFY.equals(mc.getPackageName()));
+        boolean radioPlays = mc != null && getPackageName().equals(mc.getPackageName()) && !SpotifyService.owns(mc);
+        musicTile.setVisibility(spotifyPlays ? View.GONE : View.VISIBLE);
+        radioTile.setVisibility(radioPlays ? View.GONE : View.VISIBLE);
+        int hidden = (spotifyPlays ? 1 : 0) + (radioPlays ? 1 : 0);
         LinearLayout.LayoutParams dl = (LinearLayout.LayoutParams) dock.getLayoutParams();
         if (mc != null) {
-            dl.width = px(.833f);
+            dl.width = px(.833f) - hidden * (px(.833f) + px(.017f)) / dock.getChildCount();
             dl.weight = 0;
             dl.leftMargin = px(.025f);
         } else {
@@ -1625,6 +1633,14 @@ public class MainActivity extends Activity {
                 startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"));
             } catch (ActivityNotFoundException ignored) {
             }
+            return;
+        }
+        if (mc != null && SpotifyService.owns(mc)) { // Spotify Connect → knihovna v hodinách
+            startActivity(new Intent(this, SpotifyActivity.class));
+            return;
+        }
+        if (mc != null && getPackageName().equals(mc.getPackageName())) { // rádio
+            startActivity(new Intent(this, RadioActivity.class));
             return;
         }
         if (mc != null) {
