@@ -12,6 +12,12 @@ import (
 )
 
 func init() {
+	// Android: kořenové certifikáty nejsou v /etc/ssl (statická linuxová binárka je jinak nenajde)
+	if os.Getenv("SSL_CERT_DIR") == "" {
+		if _, err := os.Stat("/system/etc/security/cacerts"); err == nil {
+			os.Setenv("SSL_CERT_DIR", "/system/etc/security/cacerts:/apex/com.android.conscrypt/cacerts")
+		}
+	}
 	servers := []string{}
 	for _, s := range strings.Split(os.Getenv("HODINY_DNS"), ",") {
 		if s = strings.TrimSpace(s); s != "" {

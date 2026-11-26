@@ -237,6 +237,8 @@ public class SpotifyService extends Service {
             ProcessBuilder pb = new ProcessBuilder(bin, "--config_dir", dir.getAbsolutePath());
             pb.environment().put("HOME", getFilesDir().getAbsolutePath());
             pb.environment().put("HODINY_DNS", dns());
+            // linuxová binárka nezná umístění certifikátů na Androidu → bez toho selže HTTPS ke Spotify
+            pb.environment().put("SSL_CERT_DIR", "/system/etc/security/cacerts:/apex/com.android.conscrypt/cacerts:/data/misc/keychain/certs-added");
             pb.directory(dir);
             status = "spouštím…";
             addLog("--- start " + new java.util.Date());
